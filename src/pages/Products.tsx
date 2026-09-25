@@ -1,0 +1,213 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Package, Search, Trash2, Edit } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { Product, ProductInsert } from '@/types';
+import { PageHeader } from '@/components/PageHeader';
+import { Modal } from '@/components/Modal';
+import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+
+const statusBadge = (status: string) => {
+  switch (status) {
+    case 'in_transit': return <span className="badge-info">In Transit</span>;
+    case 'delivered': return <span className="badge-success">Delivered</span>;
+    case 'pending': return <span className="badge-warning">Pending</span>;
+    case 'cancelled': return <span className="badge-danger">Cancelled</span>;
+    default: return <span className="badge-neutral">{status}</span>;
+  }
+};
+
+const emptyForm: ProductInsert = {
+  name: '',
+  category: '',
+  quantity: 0,
+  unit: 'units',
+  unit_price: null,
+  destination: '',
+  trip_id: null,
+  status: 'pending',
+};
+
+export function Products() {
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<ProductInsert>(emptyForm);
+  const [saving, setSaving] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    setProducts(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = products.filter(p => {
+    const matchSearch = !search ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.category?.toLowerCase().includes(search.toLowerCase()) ||
+      p.destination?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === 'all' || p.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
+  const openEdit = (p: Product) => {
+    const { id, created_at, ...rest } = p;
+    setForm(rest); setEditId(id); setModalOpen(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    if (editId) {
+      await supabase.from('products').update(form).eq('id', editId);
+    } else {
+      await supabase.from('products').insert(form);
+    }
+    setSaving(false);
+    setModalOpen(false);
+    load();
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    await supabase.from('products').delete().eq('id', deleteId);
+    setDeleteId(null);
+    load();
+  };
+
+  const update = <K extends keyof ProductInsert>(key: K, value: ProductInsert[K]) => {
+    setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const totalValue = filtered.reduce((sum, p) => sum + ((p.quantity || 0) * (p.unit_price || 0)), 0);
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <PageHeader title="Products" subtitle="Track goods and cargo being transported" icon={<Package className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Product" />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input className="input pl-9" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div className="flex items-center gap-2">
+          <select className="input w-auto" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="all">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="in_transit">In Transit</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
+            Total Value: <span className="text-emerald-600">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+          </span>
+        </div>
+      </div>
+
+      {loading ? (
+        <LoadingSpinner message="Loading products..." />
+      ) : filtered.length === 0 ? (
+        <div className="card"><EmptyState icon={<Package className="h-8 w-8" />} title="No products found" message="Add products to track what's being transported." /></div>
+      ) : (
+        <div className="card table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>Category</th>
+                <th>Quantity</th>
+                <th>Unit Price</th>
+                <th>Total Value</th>
+                <th>Destination</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(p => (
+                <tr key={p.id}>
+                  <td className="font-medium text-slate-800">{p.name}</td>
+                  <td>{p.category || '—'}</td>
+                  <td>{p.quantity} {p.unit}</td>
+                  <td>{p.unit_price ? `$${p.unit_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}</td>
+                  <td className="font-semibold text-emerald-600">
+                    {p.unit_price ? `$${((p.quantity || 0) * p.unit_price).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
+                  </td>
+                  <td>{p.destination || '—'}</td>
+                  <td>{statusBadge(p.status)}</td>
+                  <td>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => openEdit(p)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => setDeleteId(p.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Product' : 'Add Product'}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="label">Product Name *</label>
+            <input className="input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="e.g., Cement Bags" />
+          </div>
+          <div>
+            <label className="label">Category</label>
+            <input className="input" value={form.category || ''} onChange={e => update('category', e.target.value)} placeholder="e.g., Construction" />
+          </div>
+          <div>
+            <label className="label">Unit</label>
+            <select className="input" value={form.unit || 'units'} onChange={e => update('unit', e.target.value)}>
+              <option value="units">Units</option>
+              <option value="bags">Bags</option>
+              <option value="kg">Kilograms</option>
+              <option value="tons">Tons</option>
+              <option value="boxes">Boxes</option>
+              <option value="crates">Crates</option>
+            </select>
+          </div>
+          <div>
+            <label className="label">Quantity</label>
+            <input type="number" className="input" value={form.quantity ?? 0} onChange={e => update('quantity', e.target.value ? Number(e.target.value) : 0)} />
+          </div>
+          <div>
+            <label className="label">Unit Price ($)</label>
+            <input type="number" className="input" value={form.unit_price ?? ''} onChange={e => update('unit_price', e.target.value ? Number(e.target.value) : null)} />
+          </div>
+          <div>
+            <label className="label">Destination</label>
+            <input className="input" value={form.destination || ''} onChange={e => update('destination', e.target.value)} placeholder="e.g., Mombasa" />
+          </div>
+          <div>
+            <label className="label">Status</label>
+            <select className="input" value={form.status} onChange={e => update('status', e.target.value)}>
+              <option value="pending">Pending</option>
+              <option value="in_transit">In Transit</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
+          <button onClick={save} disabled={saving} className="btn-primary">{saving ? 'Saving...' : editId ? 'Update Product' : 'Add Product'}</button>
+        </div>
+      </Modal>
+
+      <ConfirmDialog open={!!deleteId} title="Delete Product" message="Are you sure you want to remove this product?" onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
+    </div>
+  );
+}
