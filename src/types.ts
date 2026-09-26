@@ -189,3 +189,13 @@ export type ClientDelivery = {
 export type WeighbridgeEntryInsert = Omit<WeighbridgeEntry, 'id' | 'created_at'>;
 export type ClientInsert = Omit<Client, 'id' | 'created_at'>;
 export type ClientDeliveryInsert = Omit<ClientDelivery, 'id' | 'created_at' | 'client'>;
+
+export type UserRole = 'admin' | 'employee';
+
+export type Profile = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: UserRole;
+  created_at: string;
+};
