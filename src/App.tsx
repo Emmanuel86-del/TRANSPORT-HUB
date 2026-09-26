@@ -52,11 +52,14 @@ function AppContent() {
     );
   }
 
-  if (!user || !profile) {
-    return <AuthPage />;
-  }
+  // ===== DEMO BYPASS — TEMPORARY, REVERT AFTER CLIENT DEMO =====
+  // Original auth gate (restore this line, delete the bypass below it):
+  // if (!user || !profile) {
+  //   return <AuthPage />;
+  // }
+  // ================================================================
 
-  const isAdmin = profile.role === 'admin';
+  const isAdmin = true; // TEMP DEMO — revert to: profile?.role === 'admin'
   const visibleNav = navItems.filter(item => !item.adminOnly || isAdmin);
 
   const navigate = (p: Page) => {
@@ -100,8 +103,8 @@ function AppContent() {
               {isAdmin ? <Shield className="h-4 w-4" /> : <UserCog className="h-4 w-4" />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-slate-200 truncate">{profile.full_name || profile.email}</p>
-              <p className="text-xs text-slate-500 capitalize">{profile.role} account</p>
+              <p className="text-sm font-medium text-slate-200 truncate">{profile?.full_name || profile?.email || 'Demo User'}</p>
+              <p className="text-xs text-slate-500 capitalize">{profile?.role || 'admin'} account</p>
             </div>
           </div>
         </div>
