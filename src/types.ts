@@ -43,9 +43,30 @@ export type Trip = {
   departure_time: string | null;
   arrival_time: string | null;
   notes: string | null;
+  cargo_type: string | null;
+  container_state: string | null;
+  trip_sequence: string | null;
+  delivery_or_container_no: string | null;
+  from_location: string | null;
+  to_location: string | null;
+  weight_kg: number | null;
+  mileage_payment: number | null;
   created_at: string;
   driver?: Driver | null;
   vehicle?: Vehicle | null;
+};
+
+export type RouteRate = {
+  id: string;
+  origin: string;
+  destination: string;
+  cargo_type: string;
+  container_state: string | null;
+  trip_sequence: string;
+  rate_amount: number;
+  is_bidirectional: boolean;
+  notes: string | null;
+  created_at: string;
 };
 
 export type Product = {
@@ -113,3 +134,4 @@ export type ProductInsert = Omit<Product, 'id' | 'created_at'>;
 export type SparePartInsert = Omit<SparePart, 'id' | 'created_at'>;
 export type WorkRecordInsert = Omit<WorkRecord, 'id' | 'created_at' | 'vehicle'>;
 export type EmployeeInsert = Omit<Employee, 'id' | 'created_at'>;
+export type RouteRateInsert = Omit<RouteRate, 'id' | 'created_at'>;

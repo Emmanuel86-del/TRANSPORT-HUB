@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
+  Calculator, ClipboardList,
   Menu, X, Truck as TruckIcon,
 } from 'lucide-react';
 import { Dashboard } from '@/pages/Dashboard';
@@ -11,15 +12,19 @@ import { Products } from '@/pages/Products';
 import { SpareParts } from '@/pages/SpareParts';
 import { WorkRecords } from '@/pages/WorkRecords';
 import { Staff } from '@/pages/Staff';
+import { RateMatrix } from '@/pages/RateMatrix';
+import { DailyDispatch } from '@/pages/DailyDispatch';
 
-type Page = 'dashboard' | 'trips' | 'vehicles' | 'drivers' | 'staff' | 'products' | 'spare-parts' | 'work-records';
+type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'drivers' | 'staff' | 'rate-matrix' | 'products' | 'spare-parts' | 'work-records';
 
 const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
   { id: 'trips', label: 'Trips', icon: <Route className="h-5 w-5" /> },
+  { id: 'daily-dispatch', label: 'Daily Dispatch', icon: <ClipboardList className="h-5 w-5" /> },
   { id: 'vehicles', label: 'Fleet', icon: <Truck className="h-5 w-5" /> },
   { id: 'drivers', label: 'Drivers', icon: <Users className="h-5 w-5" /> },
   { id: 'staff', label: 'Staff', icon: <UserCog className="h-5 w-5" /> },
+  { id: 'rate-matrix', label: 'Rate Matrix', icon: <Calculator className="h-5 w-5" /> },
   { id: 'products', label: 'Products', icon: <Package className="h-5 w-5" /> },
   { id: 'spare-parts', label: 'Spare Parts', icon: <Wrench className="h-5 w-5" /> },
   { id: 'work-records', label: 'Work Records', icon: <Wrench className="h-5 w-5" /> },
@@ -110,9 +115,11 @@ function App() {
         <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           {page === 'dashboard' && <Dashboard />}
           {page === 'trips' && <Trips />}
+          {page === 'daily-dispatch' && <DailyDispatch />}
           {page === 'vehicles' && <Vehicles />}
           {page === 'drivers' && <Drivers />}
           {page === 'staff' && <Staff />}
+          {page === 'rate-matrix' && <RateMatrix />}
           {page === 'products' && <Products />}
           {page === 'spare-parts' && <SpareParts />}
           {page === 'work-records' && <WorkRecords />}
