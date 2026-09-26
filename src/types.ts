@@ -135,3 +135,57 @@ export type SparePartInsert = Omit<SparePart, 'id' | 'created_at'>;
 export type WorkRecordInsert = Omit<WorkRecord, 'id' | 'created_at' | 'vehicle'>;
 export type EmployeeInsert = Omit<Employee, 'id' | 'created_at'>;
 export type RouteRateInsert = Omit<RouteRate, 'id' | 'created_at'>;
+
+export type WeighbridgeEntry = {
+  id: string;
+  date: string;
+  ticket_no: string;
+  lorry_no: string | null;
+  goods: string | null;
+  lot_route_consignee: string | null;
+  qty_units: string | null;
+  weight_kg: number | null;
+  flag_for_review: boolean;
+  review_notes: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type Client = {
+  id: string;
+  name: string;
+  address: string | null;
+  po_box: string | null;
+  account_no: string | null;
+  pin: string | null;
+  contact_details: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type ClientDelivery = {
+  id: string;
+  client_id: string | null;
+  date: string;
+  item_code: string | null;
+  description: string | null;
+  packaging: string | null;
+  volume_weight: string | null;
+  order_qty: number | null;
+  unit_price: number | null;
+  net_amount: number | null;
+  tax_amount: number | null;
+  total_amount: number | null;
+  invoice_no: string | null;
+  delivery_no: string | null;
+  status: string;
+  attachment_url: string | null;
+  attachment_name: string | null;
+  notes: string | null;
+  created_at: string;
+  client?: Client | null;
+};
+
+export type WeighbridgeEntryInsert = Omit<WeighbridgeEntry, 'id' | 'created_at'>;
+export type ClientInsert = Omit<Client, 'id' | 'created_at'>;
+export type ClientDeliveryInsert = Omit<ClientDelivery, 'id' | 'created_at' | 'client'>;

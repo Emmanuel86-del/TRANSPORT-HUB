@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
-  Calculator, ClipboardList,
+  Calculator, ClipboardList, Scale, FileText,
   Menu, X, Truck as TruckIcon,
 } from 'lucide-react';
 import { Dashboard } from '@/pages/Dashboard';
@@ -14,8 +14,10 @@ import { WorkRecords } from '@/pages/WorkRecords';
 import { Staff } from '@/pages/Staff';
 import { RateMatrix } from '@/pages/RateMatrix';
 import { DailyDispatch } from '@/pages/DailyDispatch';
+import { Weighbridge } from '@/pages/Weighbridge';
+import { ClientDeliveries } from '@/pages/ClientDeliveries';
 
-type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'drivers' | 'staff' | 'rate-matrix' | 'products' | 'spare-parts' | 'work-records';
+type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'drivers' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'products' | 'spare-parts' | 'work-records';
 
 const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
@@ -25,6 +27,8 @@ const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'drivers', label: 'Drivers', icon: <Users className="h-5 w-5" /> },
   { id: 'staff', label: 'Staff', icon: <UserCog className="h-5 w-5" /> },
   { id: 'rate-matrix', label: 'Rate Matrix', icon: <Calculator className="h-5 w-5" /> },
+  { id: 'weighbridge', label: 'Weighbridge', icon: <Scale className="h-5 w-5" /> },
+  { id: 'client-deliveries', label: 'Client Deliveries', icon: <FileText className="h-5 w-5" /> },
   { id: 'products', label: 'Products', icon: <Package className="h-5 w-5" /> },
   { id: 'spare-parts', label: 'Spare Parts', icon: <Wrench className="h-5 w-5" /> },
   { id: 'work-records', label: 'Work Records', icon: <Wrench className="h-5 w-5" /> },
@@ -120,6 +124,8 @@ function App() {
           {page === 'drivers' && <Drivers />}
           {page === 'staff' && <Staff />}
           {page === 'rate-matrix' && <RateMatrix />}
+          {page === 'weighbridge' && <Weighbridge />}
+          {page === 'client-deliveries' && <ClientDeliveries />}
           {page === 'products' && <Products />}
           {page === 'spare-parts' && <SpareParts />}
           {page === 'work-records' && <WorkRecords />}
