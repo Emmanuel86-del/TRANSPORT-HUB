@@ -81,7 +81,7 @@ function AppContent() {
               <TruckIcon className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-tight">TransportHub</h1>
+              <h1 className="text-base font-bold tracking-tight">Suraj Ashok Limited</h1>
               <p className="text-xs text-slate-400">Fleet Management</p>
             </div>
           </div>
@@ -147,7 +147,7 @@ function AppContent() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
               <TruckIcon className="h-5 w-5" />
             </div>
-            <span className="font-bold text-slate-900">TransportHub</span>
+            <span className="font-bold text-slate-900">Suraj Ashok Limited</span>
           </div>
         </header>
 

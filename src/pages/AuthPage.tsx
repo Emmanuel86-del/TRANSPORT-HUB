@@ -58,7 +58,7 @@ export function AuthPage() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/30 mb-3">
             <TruckIcon className="h-7 w-7" />
           </div>
-          <h1 className="text-2xl font-bold text-white">TransportHub</h1>
+          <h1 className="text-2xl font-bold text-white">Suraj Ashok Limited</h1>
           <p className="text-sm text-slate-400 mt-1">Fleet Management System</p>
         </div>
 
