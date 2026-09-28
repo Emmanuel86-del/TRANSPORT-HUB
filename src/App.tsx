@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import {
   LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
-  Calculator, ClipboardList, Scale, FileText,
-  Menu, X, LogOut, Shield, Truck as TruckIcon,
+  Calculator, ClipboardList, Scale, FileText, Wallet,
+  Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon,
 } from 'lucide-react';
 import { useAuth, AuthProvider } from '@/lib/auth';
 import { AuthPage } from '@/pages/AuthPage';
@@ -18,36 +18,61 @@ import { RateMatrix } from '@/pages/RateMatrix';
 import { DailyDispatch } from '@/pages/DailyDispatch';
 import { Weighbridge } from '@/pages/Weighbridge';
 import { ClientDeliveries } from '@/pages/ClientDeliveries';
+import { Payroll } from '@/pages/Payroll';
 import { LoadingSpinner } from '@/components/Shared';
+import { UserRole, roleRank, hasAccess } from '@/types';
 
-type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'drivers' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'products' | 'spare-parts' | 'work-records';
+type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'drivers' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'products' | 'spare-parts' | 'work-records';
 
-type NavItem = { id: Page; label: string; icon: React.ReactNode; adminOnly?: boolean };
+type NavItem = { id: Page; label: string; icon: React.ReactNode; minRole: UserRole };
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" /> },
-  { id: 'trips', label: 'Trips', icon: <Route className="h-5 w-5" /> },
-  { id: 'daily-dispatch', label: 'Daily Dispatch', icon: <ClipboardList className="h-5 w-5" /> },
-  { id: 'vehicles', label: 'Fleet', icon: <Truck className="h-5 w-5" /> },
-  { id: 'drivers', label: 'Drivers', icon: <Users className="h-5 w-5" /> },
-  { id: 'staff', label: 'Staff', icon: <UserCog className="h-5 w-5" />, adminOnly: true },
-  { id: 'rate-matrix', label: 'Rate Matrix', icon: <Calculator className="h-5 w-5" />, adminOnly: true },
-  { id: 'weighbridge', label: 'Weighbridge', icon: <Scale className="h-5 w-5" /> },
-  { id: 'client-deliveries', label: 'Client Deliveries', icon: <FileText className="h-5 w-5" />, adminOnly: true },
-  { id: 'products', label: 'Products', icon: <Package className="h-5 w-5" /> },
-  { id: 'spare-parts', label: 'Spare Parts', icon: <Wrench className="h-5 w-5" /> },
-  { id: 'work-records', label: 'Work Records', icon: <Wrench className="h-5 w-5" /> },
+  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'trips', label: 'Trips', icon: <Route className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'daily-dispatch', label: 'Daily Dispatch', icon: <ClipboardList className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'vehicles', label: 'Fleet', icon: <Truck className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'drivers', label: 'Drivers', icon: <Users className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'weighbridge', label: 'Weighbridge', icon: <Scale className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'products', label: 'Products', icon: <Package className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'spare-parts', label: 'Spare Parts', icon: <Wrench className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'work-records', label: 'Work Records', icon: <Wrench className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'staff', label: 'Staff', icon: <UserCog className="h-5 w-5" />, minRole: 'manager' },
+  { id: 'client-deliveries', label: 'Client Deliveries', icon: <FileText className="h-5 w-5" />, minRole: 'manager' },
+  { id: 'rate-matrix', label: 'Rate Matrix', icon: <Calculator className="h-5 w-5" />, minRole: 'corporate_admin' },
+  { id: 'payroll', label: 'Payroll', icon: <Wallet className="h-5 w-5" />, minRole: 'corporate_admin' },
 ];
 
+const roleIcon = (role: UserRole) => {
+  switch (role) {
+    case 'corporate_admin': return <Shield className="h-4 w-4" />;
+    case 'manager': return <Briefcase className="h-4 w-4" />;
+    default: return <UserCog className="h-4 w-4" />;
+  }
+};
+
+const roleLabel = (role: UserRole) => {
+  switch (role) {
+    case 'corporate_admin': return 'Corporate Admin';
+    case 'manager': return 'Manager';
+    default: return 'Employee';
+  }
+};
+
 function AppContent() {
-  const { user, profile, loading, signOut } = useAuth();
+  const { user, profile, loading, authError, signOut, retry } = useAuth();
   const [page, setPage] = useState<Page>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
         <LoadingSpinner message="Loading..." />
+        {authError && (
+          <div className="max-w-sm rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-center">
+            <p className="text-sm text-red-600 mb-2">{authError}</p>
+            <button onClick={() => retry()} className="text-sm font-medium text-red-700 hover:text-red-800">Retry</button>
+          </div>
+        )}
       </div>
     );
   }
@@ -56,8 +81,9 @@ function AppContent() {
     return <AuthPage />;
   }
 
-  const isAdmin = profile.role === 'admin';
-  const visibleNav = navItems.filter(item => !item.adminOnly || isAdmin);
+  const userRole = profile.role;
+  const visibleNav = navItems.filter(item => hasAccess(userRole, item.minRole));
+  const canAccess = (minRole: UserRole) => hasAccess(userRole, minRole);
 
   const navigate = (p: Page) => {
     setPage(p);
@@ -93,15 +119,14 @@ function AppContent() {
           </button>
         </div>
 
-        {/* User info */}
         <div className="px-5 py-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${isAdmin ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
-              {isAdmin ? <Shield className="h-4 w-4" /> : <UserCog className="h-4 w-4" />}
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${userRole === 'corporate_admin' ? 'bg-blue-600 text-white' : userRole === 'manager' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+              {roleIcon(userRole)}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-slate-200 truncate">{profile.full_name || profile.email}</p>
-              <p className="text-xs text-slate-500 capitalize">{profile.role} account</p>
+              <p className="text-xs text-slate-500">{roleLabel(userRole)}</p>
             </div>
           </div>
         </div>
@@ -119,7 +144,8 @@ function AppContent() {
             >
               {item.icon}
               {item.label}
-              {item.adminOnly && <Shield className="h-3 w-3 ml-auto text-slate-500" />}
+              {item.minRole === 'corporate_admin' && <Shield className="h-3 w-3 ml-auto text-slate-500" />}
+              {item.minRole === 'manager' && <Briefcase className="h-3 w-3 ml-auto text-slate-500" />}
             </button>
           ))}
         </nav>
@@ -157,10 +183,11 @@ function AppContent() {
           {page === 'daily-dispatch' && <DailyDispatch />}
           {page === 'vehicles' && <Vehicles />}
           {page === 'drivers' && <Drivers />}
-          {page === 'staff' && isAdmin && <Staff />}
-          {page === 'rate-matrix' && isAdmin && <RateMatrix />}
+          {page === 'staff' && canAccess('manager') && <Staff />}
+          {page === 'rate-matrix' && canAccess('corporate_admin') && <RateMatrix />}
           {page === 'weighbridge' && <Weighbridge />}
-          {page === 'client-deliveries' && isAdmin && <ClientDeliveries />}
+          {page === 'client-deliveries' && canAccess('manager') && <ClientDeliveries />}
+          {page === 'payroll' && canAccess('corporate_admin') && <Payroll />}
           {page === 'products' && <Products />}
           {page === 'spare-parts' && <SpareParts />}
           {page === 'work-records' && <WorkRecords />}

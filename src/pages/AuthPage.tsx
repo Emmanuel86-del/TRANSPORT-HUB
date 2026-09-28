@@ -1,10 +1,16 @@
 import { useState } from 'react';
-import { Truck as TruckIcon, Mail, Lock, User, Shield, UserCog, Eye, EyeOff } from 'lucide-react';
+import { Truck as TruckIcon, Mail, Lock, User, Shield, UserCog, Briefcase, Eye, EyeOff, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { UserRole } from '@/types';
 
+const roleOptions: { value: UserRole; label: string; icon: React.ReactNode; desc: string }[] = [
+  { value: 'employee', label: 'Employee', icon: <UserCog className="h-6 w-6" />, desc: 'Operational access only' },
+  { value: 'manager', label: 'Manager', icon: <Briefcase className="h-6 w-6" />, desc: 'Operational + management access' },
+  { value: 'corporate_admin', label: 'Corporate Admin', icon: <Shield className="h-6 w-6" />, desc: 'Full access to all modules' },
+];
+
 export function AuthPage() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, authError, retry, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,16 +50,16 @@ export function AuthPage() {
     }
   };
 
+  const displayedError = error || authError;
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-8">
-      {/* Background pattern */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-blue-600/5 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
-        {/* Logo */}
         <div className="flex flex-col items-center mb-8">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/30 mb-3">
             <TruckIcon className="h-7 w-7" />
@@ -62,9 +68,7 @@ export function AuthPage() {
           <p className="text-sm text-slate-400 mt-1">Fleet Management System</p>
         </div>
 
-        {/* Card */}
         <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
-          {/* Tabs */}
           <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-6">
             <button
               onClick={() => { setMode('signin'); setError(null); }}
@@ -79,6 +83,27 @@ export function AuthPage() {
               Create Account
             </button>
           </div>
+
+          {displayedError && (
+            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm text-red-600">{displayedError}</p>
+                  {authError && !error && (
+                    <button
+                      onClick={() => retry()}
+                      disabled={authLoading}
+                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-700 hover:text-red-800"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${authLoading ? 'animate-spin' : ''}`} />
+                      Retry
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
@@ -137,32 +162,24 @@ export function AuthPage() {
             {mode === 'signup' && (
               <div>
                 <label className="label">Account Type</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRole('admin')}
-                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${role === 'admin' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
-                  >
-                    <Shield className={`h-6 w-6 ${role === 'admin' ? 'text-blue-600' : 'text-slate-400'}`} />
-                    <span className={`text-sm font-medium ${role === 'admin' ? 'text-blue-700' : 'text-slate-600'}`}>Admin</span>
-                    <span className="text-xs text-slate-400 text-center">Full access to all modules</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('employee')}
-                    className={`flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all ${role === 'employee' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
-                  >
-                    <UserCog className={`h-6 w-6 ${role === 'employee' ? 'text-blue-600' : 'text-slate-400'}`} />
-                    <span className={`text-sm font-medium ${role === 'employee' ? 'text-blue-700' : 'text-slate-600'}`}>Employee</span>
-                    <span className="text-xs text-slate-400 text-center">Operational access only</span>
-                  </button>
+                <div className="space-y-2">
+                  {roleOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setRole(opt.value)}
+                      className={`flex items-center gap-3 w-full rounded-xl border-2 p-3 transition-all text-left ${role === opt.value ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
+                    >
+                      <div className={`shrink-0 ${role === opt.value ? 'text-blue-600' : 'text-slate-400'}`}>
+                        {opt.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-sm font-medium block ${role === opt.value ? 'text-blue-700' : 'text-slate-600'}`}>{opt.label}</span>
+                        <span className="text-xs text-slate-400">{opt.desc}</span>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </div>
-            )}
-
-            {error && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">
-                {error}
               </div>
             )}
 

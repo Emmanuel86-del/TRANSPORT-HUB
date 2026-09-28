@@ -190,7 +190,18 @@ export type WeighbridgeEntryInsert = Omit<WeighbridgeEntry, 'id' | 'created_at'>
 export type ClientInsert = Omit<Client, 'id' | 'created_at'>;
 export type ClientDeliveryInsert = Omit<ClientDelivery, 'id' | 'created_at' | 'client'>;
 
-export type UserRole = 'admin' | 'employee';
+export type UserRole = 'employee' | 'manager' | 'corporate_admin';
+
+export const roleRank: Record<UserRole, number> = {
+  employee: 0,
+  manager: 1,
+  corporate_admin: 2,
+};
+
+export function hasAccess(userRole: UserRole | null, minRole: UserRole): boolean {
+  if (!userRole) return false;
+  return roleRank[userRole] >= roleRank[minRole];
+}
 
 export type Profile = {
   id: string;
@@ -199,3 +210,22 @@ export type Profile = {
   role: UserRole;
   created_at: string;
 };
+
+export type PayrollRecord = {
+  id: string;
+  employee_id: string | null;
+  payee_name: string;
+  pay_period_start: string | null;
+  pay_period_end: string | null;
+  pay_date: string;
+  gross_salary: number;
+  deductions: number;
+  net_salary: number;
+  payment_method: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  employee?: Employee | null;
+};
+
+export type PayrollRecordInsert = Omit<PayrollRecord, 'id' | 'created_at' | 'employee'>;
