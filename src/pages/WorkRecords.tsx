@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Wrench, Search, Trash2, Edit } from 'lucide-react';
+import { Wrench, Search, Trash2, Edit, Upload, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { WorkRecord, Vehicle, WorkRecordInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -15,7 +15,7 @@ const statusBadge = (status: string) => {
   }
 };
 
-const emptyForm: WorkRecordInsert = {
+const emptyForm: WorkRecordInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   work_date: new Date().toISOString().slice(0, 10),
   vehicle_id: null,
   description: '',
@@ -26,6 +26,8 @@ const emptyForm: WorkRecordInsert = {
   performed_by: '',
   status: 'completed',
   notes: '',
+  attachment_url: null,
+  attachment_name: null,
 };
 
 export function WorkRecords() {
@@ -35,9 +37,10 @@ export function WorkRecords() {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<WorkRecordInsert>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,7 +55,7 @@ export function WorkRecords() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = records.filter(r =>
+  const filtered = records.filter((r: any) =>
     !search ||
     r.description.toLowerCase().includes(search.toLowerCase()) ||
     r.work_type?.toLowerCase().includes(search.toLowerCase()) ||
@@ -63,9 +66,21 @@ export function WorkRecords() {
   const totalParts = records.reduce((s, r) => s + (r.parts_cost || 0), 0);
 
   const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (r: WorkRecord) => {
+  const openEdit = (r: WorkRecord & { attachment_url?: string | null; attachment_name?: string | null }) => {
     const { id, created_at, vehicle, ...rest } = r;
     setForm(rest); setEditId(id); setModalOpen(true);
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `workrecord_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(fileName, file);
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
+    }
+    setUploading(false);
   };
 
   const save = async () => {
@@ -88,7 +103,7 @@ export function WorkRecords() {
     load();
   };
 
-  const update = <K extends keyof WorkRecordInsert>(key: K, value: WorkRecordInsert[K]) => {
+  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -124,13 +139,13 @@ export function WorkRecords() {
                 <th>Labor Cost</th>
                 <th>Parts Cost</th>
                 <th>Total</th>
-                <th>Performed By</th>
+                <th>Doc</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(r => (
+              {filtered.map((r: any) => (
                 <tr key={r.id}>
                   <td className="font-medium text-slate-800 whitespace-nowrap">{r.work_date}</td>
                   <td className="max-w-xs truncate">{r.description}</td>
@@ -140,16 +155,18 @@ export function WorkRecords() {
                   <td className="text-rose-600">{r.labor_cost ? `$${r.labor_cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}</td>
                   <td className="text-amber-600">{r.parts_cost ? `$${r.parts_cost.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}</td>
                   <td className="font-semibold text-slate-700">${((r.labor_cost || 0) + (r.parts_cost || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
-                  <td>{r.performed_by || '—'}</td>
+                  <td>
+                    {r.attachment_url ? (
+                      <a href={r.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
+                        <ExternalLink className="h-3.5 w-3.5" /> View
+                      </a>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td>{statusBadge(r.status)}</td>
                   <td>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => setDeleteId(r.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => setDeleteId(r.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -161,10 +178,7 @@ export function WorkRecords() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Work Record' : 'New Work Record'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">Work Date *</label>
-            <input type="date" className="input" value={form.work_date} onChange={e => update('work_date', e.target.value)} />
-          </div>
+          <div><label className="label">Work Date *</label><input type="date" className="input" value={form.work_date} onChange={e => update('work_date', e.target.value)} /></div>
           <div>
             <label className="label">Vehicle</label>
             <select className="input" value={form.vehicle_id || ''} onChange={e => update('vehicle_id', e.target.value || null)}>
@@ -172,10 +186,7 @@ export function WorkRecords() {
               {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} — {v.make} {v.model}</option>)}
             </select>
           </div>
-          <div className="sm:col-span-2">
-            <label className="label">Description *</label>
-            <input className="input" value={form.description} onChange={e => update('description', e.target.value)} placeholder="e.g., Oil change and filter replacement" />
-          </div>
+          <div className="sm:col-span-2"><label className="label">Description *</label><input className="input" value={form.description} onChange={e => update('description', e.target.value)} placeholder="e.g., Oil change" /></div>
           <div>
             <label className="label">Work Type</label>
             <select className="input" value={form.work_type || ''} onChange={e => update('work_type', e.target.value)}>
@@ -183,10 +194,6 @@ export function WorkRecords() {
               <option value="routine">Routine Service</option>
               <option value="repair">Repair</option>
               <option value="inspection">Inspection</option>
-              <option value="tire">Tire Service</option>
-              <option value="engine">Engine Work</option>
-              <option value="electrical">Electrical</option>
-              <option value="body">Body Work</option>
               <option value="other">Other</option>
             </select>
           </div>
@@ -198,26 +205,29 @@ export function WorkRecords() {
               <option value="completed">Completed</option>
             </select>
           </div>
-          <div>
-            <label className="label">Hours Worked</label>
-            <input type="number" className="input" value={form.hours_worked ?? ''} onChange={e => update('hours_worked', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-          <div>
-            <label className="label">Performed By</label>
-            <input className="input" value={form.performed_by || ''} onChange={e => update('performed_by', e.target.value)} placeholder="Mechanic name" />
-          </div>
-          <div>
-            <label className="label">Labor Cost ($)</label>
-            <input type="number" className="input" value={form.labor_cost ?? ''} onChange={e => update('labor_cost', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-          <div>
-            <label className="label">Parts Cost ($)</label>
-            <input type="number" className="input" value={form.parts_cost ?? 0} onChange={e => update('parts_cost', e.target.value ? Number(e.target.value) : 0)} />
-          </div>
+          <div><label className="label">Hours Worked</label><input type="number" className="input" value={form.hours_worked ?? ''} onChange={e => update('hours_worked', e.target.value ? Number(e.target.value) : null)} /></div>
+          <div><label className="label">Performed By</label><input className="input" value={form.performed_by || ''} onChange={e => update('performed_by', e.target.value)} /></div>
+          <div><label className="label">Labor Cost ($)</label><input type="number" className="input" value={form.labor_cost ?? ''} onChange={e => update('labor_cost', e.target.value ? Number(e.target.value) : null)} /></div>
+          <div><label className="label">Parts Cost ($)</label><input type="number" className="input" value={form.parts_cost ?? 0} onChange={e => update('parts_cost', e.target.value ? Number(e.target.value) : 0)} /></div>
           <div className="sm:col-span-2">
-            <label className="label">Notes</label>
-            <textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} />
+            <label className="label">Upload Job Card / Invoice</label>
+            <div className="flex items-center gap-2">
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" />
+                {uploading ? 'Uploading...' : 'Choose File'}
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUpload(file);
+                }} />
+              </label>
+              {form.attachment_url && (
+                <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                  <ExternalLink className="h-4 w-4" /> {form.attachment_name || 'View document'}
+                </a>
+              )}
+            </div>
           </div>
+          <div className="sm:col-span-2"><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} /></div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
