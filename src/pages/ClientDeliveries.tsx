@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { FileText, Search, Trash2, Edit, Upload, ExternalLink, Users } from 'lucide-react';
+import { FileText, Search, Trash2, Edit, Upload, ExternalLink, Users, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Client, ClientDelivery, ClientInsert, ClientDeliveryInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -39,6 +39,19 @@ const emptyDelivery: ClientDeliveryInsert = {
   notes: '',
 };
 
+function downloadTemplate() {
+  const headers = ['date', 'item_code', 'description', 'packaging', 'volume_weight', 'order_qty', 'unit_price', 'invoice_no', 'delivery_no', 'status'];
+  const sampleRow = ['2026-06-01', 'DIESEL-AGO', 'Automotive Gas Oil', '200L drums', '200L', '10', '150000', 'INV-001', 'DN-001', 'delivered'];
+  const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `deliveries_bulk_template.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function ClientDeliveries() {
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState<Client[]>([]);
@@ -48,6 +61,7 @@ export function ClientDeliveries() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [clientModalOpen, setClientModalOpen] = useState(false);
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [editClientId, setEditClientId] = useState<string | null>(null);
   const [editDeliveryId, setEditDeliveryId] = useState<string | null>(null);
   const [clientForm, setClientForm] = useState<ClientInsert>(emptyClient);
@@ -56,6 +70,7 @@ export function ClientDeliveries() {
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
   const [deleteDeliveryId, setDeleteDeliveryId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -171,13 +186,56 @@ export function ClientDeliveries() {
     setUploading(false);
   };
 
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkUploading(true);
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) { alert('File is empty.'); setBulkUploading(false); return; }
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    const rows = lines.slice(1).map(line => {
+      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"\vert{}"$/g, ''));
+      const obj: any = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || null; });
+      const qty = obj.order_qty ? Number(obj.order_qty) : 0;
+      const price = obj.unit_price ? Number(obj.unit_price) : 0;
+      const net = qty * price;
+      const tax = Math.round(net * 0.16);
+      const total = net + tax;
+
+      return {
+        client_id: selectedClientId || null,
+        date: obj.date || new Date().toISOString().slice(0, 10),
+        item_code: obj.item_code || '',
+        description: obj.description || '',
+        packaging: obj.packaging || '',
+        volume_weight: obj.volume_weight || '',
+        order_qty: qty,
+        unit_price: price,
+        net_amount: net,
+        tax_amount: tax,
+        total_amount: total,
+        invoice_no: obj.invoice_no || '',
+        delivery_no: obj.delivery_no || '',
+        status: obj.status || 'delivered',
+      };
+    });
+
+    const { error } = await supabase.from('client_deliveries').insert(rows);
+    setBulkUploading(false);
+    if (error) alert('Error: ' + error.message);
+    else { setBulkModalOpen(false); load(); }
+  };
+
   return (
     <div className="space-y-5 animate-fade-in">
       <PageHeader title="Client Deliveries" subtitle="Delivery notes, invoices, and client account management" icon={<FileText className="h-6 w-6" />} onAdd={openAddDelivery} addLabel="Add Delivery" />
 
       {/* Client selector + add client */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Users className="h-4 w-4 text-slate-400" />
           <select className="input w-auto" value={selectedClientId || ''} onChange={e => setSelectedClientId(e.target.value || null)}>
             <option value="">All Clients</option>
@@ -189,10 +247,14 @@ export function ClientDeliveries() {
             </button>
           )}
         </div>
-        <button onClick={openAddClient} className="btn btn-secondary">
-          <Users className="h-4 w-4" />
-          Add Client
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setBulkModalOpen(true)} className="btn btn-secondary">
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Bulk Excel Upload
+          </button>
+          <button onClick={openAddClient} className="btn btn-secondary">
+            <Users className="h-4 w-4" /> Add Client
+          </button>
+        </div>
       </div>
 
       {/* Client info card when selected */}
@@ -312,6 +374,22 @@ export function ClientDeliveries() {
           </table>
         </div>
       )}
+
+      {/* Bulk Upload Modal */}
+      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Deliveries via Excel/CSV" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Download the required template, fill in your delivery records, and upload the completed CSV file. {selectedClient ? `(Will be assigned to ${selectedClient.name})` : ''}</p>
+          <button onClick={downloadTemplate} className="btn btn-secondary w-full flex items-center justify-center gap-2">
+            <Download className="h-4 w-4 text-blue-600" /> Download Deliveries Template
+          </button>
+          <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500">
+            <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-2" />
+            <span className="text-sm font-medium text-slate-700">{bulkUploading ? 'Importing...' : 'Click to select filled CSV file'}</span>
+            <input type="file" accept=".csv" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end"><button onClick={() => setBulkModalOpen(false)} className="btn-secondary">Close</button></div>
+      </Modal>
 
       {/* Client Modal */}
       <Modal open={clientModalOpen} onClose={() => setClientModalOpen(false)} title={editClientId ? 'Edit Client' : 'Add Client'} size="lg">
