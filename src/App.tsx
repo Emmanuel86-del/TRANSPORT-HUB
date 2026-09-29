@@ -66,7 +66,6 @@ function AppContent() {
   const { user, profile, loading, authError, signOut, retry } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Read initial page from URL hash or default to 'dashboard'
   const getPageFromHash = (): Page => {
     const hash = window.location.hash.replace('#/', '') as Page;
     const validPages = navItems.map(i => i.id);
@@ -75,7 +74,6 @@ function AppContent() {
 
   const [page, setPage] = useState<Page>(getPageFromHash);
 
-  // Listen to browser back/forward buttons
   useEffect(() => {
     const handleHashChange = () => {
       setPage(getPageFromHash());
@@ -225,7 +223,7 @@ function App() {
   return (
     <AuthProvider>
       <AppContent />
-    </AuthAuthProvider>
+    </AuthProvider>
   );
 }
 
