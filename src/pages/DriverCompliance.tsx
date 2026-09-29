@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { UserCheck, AlertTriangle, Bell, Edit } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { UserCheck, AlertTriangle, Bell, Edit, Download, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
@@ -8,7 +8,7 @@ import { LoadingSpinner, EmptyState } from '@/components/Shared';
 interface DriverComplianceRecord {
   id: string;
   driver_id: string;
-  driver?: { name: string; phone: string; id_number?: string };
+  driver?: { name: string; phone: string };
   license_start: string;
   license_expiry: string;
   compliance_start: string;
@@ -17,7 +17,6 @@ interface DriverComplianceRecord {
   atic_insurance_expiry: string;
 }
 
-// Expiry helper (same logic: expired, <2wks warning, <1mo warning, ok)
 function getExpiryStatus(expiryDateStr: string) {
   if (!expiryDateStr) return 'ok';
   const today = new Date();
@@ -54,6 +53,7 @@ export function DriverCompliance() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const emptyForm = {
     driver_id: '',
@@ -100,15 +100,90 @@ export function DriverCompliance() {
     loadData();
   };
 
+  // Download Driver CSV Template
+  const downloadTemplate = () => {
+    const csvContent = "driver_phone,license_start,license_expiry,compliance_start,compliance_expiry,atic_insurance_start,atic_insurance_expiry\n" +
+      "0712345678,2026-01-01,2027-01-01,2026-01-01,2027-01-01,2026-01-01,2027-01-01";
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'driver_compliance_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Handle Driver Bulk Upload CSV
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) {
+        alert('The CSV file is empty or formatted incorrectly.');
+        return;
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim());
+      let successCount = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        const rowData: Record<string, string> = {};
+        headers.forEach((h, index) => {
+          rowData[h] = values[index] || '';
+        });
+
+        const phone = rowData['driver_phone'];
+        if (!phone) continue;
+
+        const matchedDriver = drivers.find(d => d.phone.includes(phone));
+        if (matchedDriver) {
+          const payload = {
+            driver_id: matchedDriver.id,
+            license_start: rowData['license_start'] || null,
+            license_expiry: rowData['license_expiry'] || null,
+            compliance_start: rowData['compliance_start'] || null,
+            compliance_expiry: rowData['compliance_expiry'] || null,
+            atic_insurance_start: rowData['atic_insurance_start'] || null,
+            atic_insurance_expiry: rowData['atic_insurance_expiry'] || null,
+          };
+          await supabase.from('driver_compliance').insert(payload);
+          successCount++;
+        }
+      }
+
+      alert(`Successfully imported ${successCount} driver compliance record(s)!`);
+      loadData();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader 
-        title="Driver Compliance & Licensing" 
-        subtitle="Monitor Driver's Licenses, Compliance Documents, and ATIC Insurance Expirations" 
-        icon={<UserCheck className="h-6 w-6" />} 
-        onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
-        addLabel="Add Driver Compliance" 
-      />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <PageHeader 
+          title="Driver Compliance & Licensing" 
+          subtitle="Monitor Driver's Licenses, Compliance Documents, and ATIC Insurance Expirations" 
+          icon={<UserCheck className="h-6 w-6" />} 
+          onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
+          addLabel="Add Driver Compliance" 
+        />
+        <div className="flex items-center gap-2">
+          <button onClick={downloadTemplate} className="btn-secondary flex items-center gap-1.5 text-xs">
+            <Download className="h-4 w-4" /> Download Template
+          </button>
+          <button onClick={() => fileInputRef.current?.click()} className="btn-primary flex items-center gap-1.5 text-xs">
+            <Upload className="h-4 w-4" /> Bulk Upload CSV
+          </button>
+          <input type="file" ref={fileInputRef} onChange={handleBulkUpload} accept=".csv" className="hidden" />
+        </div>
+      </div>
 
       {activeAlarms.length > 0 && (
         <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
@@ -126,7 +201,7 @@ export function DriverCompliance() {
         <LoadingSpinner message="Loading driver compliance records..." />
       ) : records.length === 0 ? (
         <div className="card">
-          <EmptyState icon={<UserCheck className="h-8 w-8" />} title="No driver compliance logs found" message="Add license and insurance schedules for your drivers." />
+          <EmptyState icon={<UserCheck className="h-8 w-8" />} title="No driver compliance logs found" message="Add compliance schedules manually or use bulk upload." />
         </div>
       ) : (
         <div className="card table-wrapper">
@@ -189,20 +264,17 @@ export function DriverCompliance() {
             </select>
           </div>
 
-          {/* Driver's License */}
           <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">Driver's License</div>
           <div><label className="label">Start Date</label><input type="date" className="input" value={form.license_start} onChange={e => setForm({ ...form, license_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date (Alarm Trigger)</label><input type="date" className="input" value={form.license_expiry} onChange={e => setForm({ ...form, license_expiry: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.license_expiry} onChange={e => setForm({ ...form, license_expiry: e.target.value })} /></div>
 
-          {/* General Compliance */}
           <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">General Compliance</div>
           <div><label className="label">Start Date</label><input type="date" className="input" value={form.compliance_start} onChange={e => setForm({ ...form, compliance_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date (Alarm Trigger)</label><input type="date" className="input" value={form.compliance_expiry} onChange={e => setForm({ ...form, compliance_expiry: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.compliance_expiry} onChange={e => setForm({ ...form, compliance_expiry: e.target.value })} /></div>
 
-          {/* ATIC Compliance Insurance */}
           <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">ATIC Compliance Insurance</div>
           <div><label className="label">Start Date</label><input type="date" className="input" value={form.atic_insurance_start} onChange={e => setForm({ ...form, atic_insurance_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date (Alarm Trigger)</label><input type="date" className="input" value={form.atic_insurance_expiry} onChange={e => setForm({ ...form, atic_insurance_expiry: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.atic_insurance_expiry} onChange={e => setForm({ ...form, atic_insurance_expiry: e.target.value })} /></div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
