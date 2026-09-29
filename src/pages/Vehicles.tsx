@@ -1,325 +1,223 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Truck, Search, Trash2, Edit } from 'lucide-react';
+import { Truck, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { Vehicle, VehicleInsert, Driver, Employee } from '@/types';
+import { Fleet, FleetInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
 
-const statusBadge = (status: string) => {
-  switch (status) {
-    case 'active': return <span className="badge-success">Active</span>;
-    case 'maintenance': return <span className="badge-warning">Maintenance</span>;
-    case 'retired': return <span className="badge-neutral">Retired</span>;
-    default: return <span className="badge-neutral">{status}</span>;
-  }
-};
-
-const emptyForm: VehicleInsert = {
-  plate_number: '',
-  make: '',
-  model: '',
+const emptyForm: FleetInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
+  lorry_no: '',
+  make_model: '',
   year: null,
-  capacity_kg: null,
-  fuel_type: 'diesel',
+  insurance_expiry: '',
+  inspection_expiry: '',
   status: 'active',
-  current_odometer: 0,
-  last_service_date: null,
-  trailer_number: null,
   notes: '',
+  attachment_url: null,
+  attachment_name: null,
 };
 
-type FleetRosterRow = {
-  vehicle: Vehicle;
-  driver: Driver | null;
-  employee: Employee | null;
-};
+function downloadTemplate() {
+  const headers = ['lorry_no', 'make_model', 'year', 'insurance_expiry', 'inspection_expiry', 'status', 'notes'];
+  const sampleRow = ['KDA 123A', 'Scania R450', '2022', '2027-01-15', '2026-11-20', 'active', 'Main fleet'];
+  const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `fleet_bulk_template.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
-export function Vehicles() {
+export function Fleets() {
   const [loading, setLoading] = useState(true);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [fleets, setFleets] = useState<Fleet[]>([]);
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<VehicleInsert>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'fleet' | 'roster'>('fleet');
-  const [roster, setRoster] = useState<FleetRosterRow[]>([]);
-  const [rosterLoading, setRosterLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('vehicles').select('*').order('created_at', { ascending: false });
-    setVehicles(data || []);
+    const { data } = await supabase.from('fleets').select('*').order('lorry_no', { ascending: true });
+    setFleets(data || []);
     setLoading(false);
   }, []);
 
-  const loadRoster = useCallback(async () => {
-    setRosterLoading(true);
-    const [vehicleRes, tripRes, driverRes, employeeRes] = await Promise.all([
-      supabase.from('vehicles').select('*').order('plate_number'),
-      supabase.from('trips').select('vehicle_id, driver_id').in('status', ['in_progress', 'scheduled']).order('trip_date', { ascending: false }),
-      supabase.from('drivers').select('*'),
-      supabase.from('employees').select('*'),
-    ]);
+  useEffect(() => { load(); }, [load]);
 
-    const vehiclesList = vehicleRes.data || [];
-    const driversList = driverRes.data || [];
-    const employeesList = employeeRes.data || [];
-
-    const latestTripByVehicle = new Map<string, string>();
-    for (const t of tripRes.data || []) {
-      if (t.vehicle_id && !latestTripByVehicle.has(t.vehicle_id)) {
-        latestTripByVehicle.set(t.vehicle_id, t.driver_id);
-      }
-    }
-
-    const rows: FleetRosterRow[] = vehiclesList.map(v => {
-      const driverId = latestTripByVehicle.get(v.id);
-      const driver = driverId ? driversList.find(d => d.id === driverId) || null : null;
-      const employee = driver ? employeesList.find(e => e.name === driver.name) || null : null;
-      return { vehicle: v, driver, employee };
-    });
-    setRoster(rows);
-    setRosterLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (activeTab === 'fleet') load();
-    else loadRoster();
-  }, [activeTab, load, loadRoster]);
-
-  const filtered = vehicles.filter(v =>
-    !search ||
-    v.plate_number.toLowerCase().includes(search.toLowerCase()) ||
-    v.make?.toLowerCase().includes(search.toLowerCase()) ||
-    v.model?.toLowerCase().includes(search.toLowerCase()) ||
-    v.trailer_number?.toLowerCase().includes(search.toLowerCase())
+  const filtered = fleets.filter(f =>
+    !search || f.lorry_no.toLowerCase().includes(search.toLowerCase()) || f.make_model?.toLowerCase().includes(search.toLowerCase())
   );
 
   const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (v: Vehicle) => {
-    const { id, created_at, ...rest } = v;
-    setForm(rest); setEditId(id); setModalOpen(true);
+  const openEdit = (f: any) => { const { id, created_at, ...rest } = f; setForm(rest); setEditId(id); setModalOpen(true); };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `fleet_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(fileName, file);
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
+    }
+    setUploading(false);
+  };
+
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkUploading(true);
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) { alert('File is empty.'); setBulkUploading(false); return; }
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    const rows = lines.slice(1).map(line => {
+      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
+      const obj: any = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || null; });
+      return {
+        lorry_no: obj.lorry_no || 'KAA 000A',
+        make_model: obj.make_model || '',
+        year: obj.year ? Number(obj.year) : null,
+        insurance_expiry: obj.insurance_expiry || null,
+        inspection_expiry: obj.inspection_expiry || null,
+        status: obj.status || 'active',
+        notes: obj.notes || '',
+      };
+    });
+
+    const { error } = await supabase.from('fleets').insert(rows);
+    setBulkUploading(false);
+    if (error) alert('Error: ' + error.message);
+    else { setBulkModalOpen(false); load(); }
   };
 
   const save = async () => {
     setSaving(true);
-    if (editId) {
-      await supabase.from('vehicles').update(form).eq('id', editId);
-    } else {
-      await supabase.from('vehicles').insert(form);
-    }
-    setSaving(false);
-    setModalOpen(false);
-    load();
+    if (editId) await supabase.from('fleets').update(form).eq('id', editId);
+    else await supabase.from('fleets').insert(form);
+    setSaving(false); setModalOpen(false); load();
   };
 
   const confirmDelete = async () => {
     if (!deleteId) return;
-    await supabase.from('vehicles').delete().eq('id', deleteId);
-    setDeleteId(null);
-    load();
+    await supabase.from('fleets').delete().eq('id', deleteId);
+    setDeleteId(null); load();
   };
 
-  const update = <K extends keyof VehicleInsert>(key: K, value: VehicleInsert[K]) => {
+  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Fleet" subtitle="Manage your vehicle fleet and trailer assignments" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" />
+      <PageHeader title="Fleet Management" subtitle="Vehicle inventory, insurance, and inspection tracking" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" />
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
-        <button
-          onClick={() => setActiveTab('fleet')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'fleet' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Vehicles
-        </button>
-        <button
-          onClick={() => setActiveTab('roster')}
-          className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-            activeTab === 'roster' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          Fleet Roster
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input className="input pl-9" placeholder="Search vehicle or model..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <button onClick={() => setBulkModalOpen(true)} className="btn btn-secondary self-start sm:self-auto">
+          <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Bulk Excel Upload
         </button>
       </div>
 
-      {activeTab === 'fleet' && (
-        <>
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input className="input pl-9" placeholder="Search by plate, make, or trailer..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-
-          {loading ? (
-            <LoadingSpinner message="Loading vehicles..." />
-          ) : filtered.length === 0 ? (
-            <div className="card"><EmptyState icon={<Truck className="h-8 w-8" />} title="No vehicles found" message="Add your first vehicle to start managing your fleet." /></div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map(v => (
-                <div key={v.id} className="card p-5 transition-shadow hover:shadow-md">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                        <Truck className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-slate-900">{v.plate_number}</h3>
-                        <p className="text-sm text-slate-500">{v.make} {v.model}{v.year ? ` (${v.year})` : ''}</p>
-                      </div>
+      {loading ? <LoadingSpinner message="Loading fleet..." /> : filtered.length === 0 ? (
+        <div className="card"><EmptyState icon={<Truck className="h-8 w-8" />} title="No vehicles found" message="Add vehicles to manage your fleet register." /></div>
+      ) : (
+        <div className="card table-wrapper">
+          <table className="data-table">
+            <thead>
+              <tr><th>Lorry No.</th><th>Make & Model</th><th>Year</th><th>Insurance Expiry</th><th>Inspection Expiry</th><th>Doc</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              {filtered.map((f: any) => (
+                <tr key={f.id}>
+                  <td className="font-semibold text-slate-800">{f.lorry_no}</td>
+                  <td>{f.make_model || '—'}</td>
+                  <td>{f.year || '—'}</td>
+                  <td className="text-xs text-slate-600">{f.insurance_expiry || '—'}</td>
+                  <td className="text-xs text-slate-600">{f.inspection_expiry || '—'}</td>
+                  <td>
+                    {f.attachment_url ? (
+                      <a href={f.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
+                        <ExternalLink className="h-3.5 w-3.5" /> View
+                      </a>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
+                  <td><span className={`badge-${f.status === 'active' ? 'success' : 'neutral'}`}>{f.status}</span></td>
+                  <td>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => openEdit(f)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => setDeleteId(f.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                     </div>
-                    {statusBadge(v.status)}
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-xs text-slate-400">Trailer</p>
-                      <p className="font-medium text-slate-700">{v.trailer_number || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Capacity</p>
-                      <p className="font-medium text-slate-700">{v.capacity_kg ? `${v.capacity_kg} kg` : '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Odometer</p>
-                      <p className="font-medium text-slate-700">{v.current_odometer ? `${v.current_odometer.toLocaleString()} km` : '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400">Last Service</p>
-                      <p className="font-medium text-slate-700">{v.last_service_date || '—'}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 flex justify-end gap-1">
-                    <button onClick={() => openEdit(v)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button onClick={() => setDeleteId(v.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
+                  </td>
+                </tr>
               ))}
-            </div>
-          )}
-        </>
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {activeTab === 'roster' && (
-        <>
-          <p className="text-sm text-slate-500">
-            The Fleet Roster links each truck and trailer to its currently assigned driver and that driver's compliance details (KRA, NSSF, SHA).
-          </p>
-          {rosterLoading ? (
-            <LoadingSpinner message="Loading fleet roster..." />
-          ) : roster.length === 0 ? (
-            <div className="card"><EmptyState icon={<Truck className="h-8 w-8" />} title="No roster data" message="Add vehicles and assign trips to build the fleet roster." /></div>
-          ) : (
-            <div className="card table-wrapper">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Plate Number</th>
-                    <th>Trailer</th>
-                    <th>Make / Model</th>
-                    <th>Status</th>
-                    <th>Assigned Driver</th>
-                    <th>Driver Phone</th>
-                    <th>KRA PIN</th>
-                    <th>NSSF No.</th>
-                    <th>SHA No.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {roster.map(row => (
-                    <tr key={row.vehicle.id}>
-                      <td className="font-medium text-slate-800">{row.vehicle.plate_number}</td>
-                      <td className="font-mono text-xs text-slate-600">{row.vehicle.trailer_number || '—'}</td>
-                      <td>{row.vehicle.make} {row.vehicle.model}</td>
-                      <td>{statusBadge(row.vehicle.status)}</td>
-                      <td className="font-medium text-slate-700">{row.driver?.name || <span className="text-slate-400">Unassigned</span>}</td>
-                      <td>{row.driver?.phone || '—'}</td>
-                      <td className="font-mono text-xs text-slate-500">{row.employee?.kra_pin || '—'}</td>
-                      <td className="font-mono text-xs text-slate-500">{row.employee?.nssf_number || '—'}</td>
-                      <td className="font-mono text-xs text-slate-500">{row.employee?.sha_number || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </>
-      )}
+      {/* Bulk Upload Modal */}
+      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Fleet via Excel/CSV" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Download the required template, fill in your fleet records, and upload the completed CSV file.</p>
+          <button onClick={downloadTemplate} className="btn btn-secondary w-full flex items-center justify-center gap-2">
+            <Download className="h-4 w-4 text-blue-600" /> Download Fleet Template
+          </button>
+          <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500">
+            <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-2" />
+            <span className="text-sm font-medium text-slate-700">{bulkUploading ? 'Importing...' : 'Click to select filled CSV file'}</span>
+            <input type="file" accept=".csv" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end"><button onClick={() => setBulkModalOpen(false)} className="btn-secondary">Close</button></div>
+      </Modal>
 
+      {/* Add/Edit Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Vehicle' : 'Add Vehicle'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">Plate Number *</label>
-            <input className="input" value={form.plate_number} onChange={e => update('plate_number', e.target.value)} placeholder="e.g., KDA 123A" />
-          </div>
-          <div>
-            <label className="label">Trailer Number</label>
-            <input className="input" value={form.trailer_number || ''} onChange={e => update('trailer_number', e.target.value || null)} placeholder="e.g., TR-001" />
-          </div>
+          <div><label className="label">Lorry No. *</label><input className="input" value={form.lorry_no} onChange={e => update('lorry_no', e.target.value)} /></div>
+          <div><label className="label">Make & Model</label><input className="input" value={form.make_model || ''} onChange={e => update('make_model', e.target.value)} /></div>
+          <div><label className="label">Year</label><input type="number" className="input" value={form.year ?? ''} onChange={e => update('year', e.target.value ? Number(e.target.value) : null)} /></div>
+          <div><label className="label">Insurance Expiry</label><input type="date" className="input" value={form.insurance_expiry || ''} onChange={e => update('insurance_expiry', e.target.value)} /></div>
+          <div><label className="label">Inspection Expiry</label><input type="date" className="input" value={form.inspection_expiry || ''} onChange={e => update('inspection_expiry', e.target.value)} /></div>
           <div>
             <label className="label">Status</label>
-            <select className="input" value={form.status} onChange={e => update('status', e.target.value)}>
-              <option value="active">Active</option>
-              <option value="maintenance">Maintenance</option>
-              <option value="retired">Retired</option>
+            <select className="input" value={form.status} onChange={e => update('status', e.target.value as any)}>
+              <option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option>
             </select>
-          </div>
-          <div>
-            <label className="label">Make</label>
-            <input className="input" value={form.make || ''} onChange={e => update('make', e.target.value)} placeholder="e.g., Isuzu" />
-          </div>
-          <div>
-            <label className="label">Model</label>
-            <input className="input" value={form.model || ''} onChange={e => update('model', e.target.value)} placeholder="e.g., FRR" />
-          </div>
-          <div>
-            <label className="label">Year</label>
-            <input type="number" className="input" value={form.year ?? ''} onChange={e => update('year', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-          <div>
-            <label className="label">Capacity (kg)</label>
-            <input type="number" className="input" value={form.capacity_kg ?? ''} onChange={e => update('capacity_kg', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-          <div>
-            <label className="label">Fuel Type</label>
-            <select className="input" value={form.fuel_type || 'diesel'} onChange={e => update('fuel_type', e.target.value)}>
-              <option value="diesel">Diesel</option>
-              <option value="petrol">Petrol</option>
-              <option value="electric">Electric</option>
-              <option value="hybrid">Hybrid</option>
-            </select>
-          </div>
-          <div>
-            <label className="label">Current Odometer (km)</label>
-            <input type="number" className="input" value={form.current_odometer ?? 0} onChange={e => update('current_odometer', e.target.value ? Number(e.target.value) : 0)} />
-          </div>
-          <div>
-            <label className="label">Last Service Date</label>
-            <input type="date" className="input" value={form.last_service_date || ''} onChange={e => update('last_service_date', e.target.value || null)} />
           </div>
           <div className="sm:col-span-2">
-            <label className="label">Notes</label>
-            <textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} />
+            <label className="label">Upload Document</label>
+            <div className="flex items-center gap-2">
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
+              </label>
+              {form.attachment_url && <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1"><ExternalLink className="h-4 w-4" /> View</a>}
+            </div>
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
-          <button onClick={save} disabled={saving} className="btn-primary">{saving ? 'Saving...' : editId ? 'Update Vehicle' : 'Add Vehicle'}</button>
+          <button onClick={save} disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
         </div>
       </Modal>
 
-      <ConfirmDialog open={!!deleteId} title="Delete Vehicle" message="Are you sure you want to remove this vehicle from the fleet?" onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
+      <ConfirmDialog open={!!deleteId} title="Delete Vehicle" message="Are you sure?" onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
     </div>
   );
 }
