@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Wrench, Search, Trash2, Edit, AlertTriangle } from 'lucide-react';
+import { Wrench, Search, Trash2, Edit, AlertTriangle, Upload, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { SparePart, SparePartInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
 
-const emptyForm: SparePartInsert = {
+const emptyForm: SparePartInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   part_name: '',
   part_number: '',
   category: '',
@@ -17,6 +17,8 @@ const emptyForm: SparePartInsert = {
   vehicle_compatibility: '',
   last_restocked: null,
   notes: '',
+  attachment_url: null,
+  attachment_name: null,
 };
 
 export function SpareParts() {
@@ -26,9 +28,10 @@ export function SpareParts() {
   const [showLowOnly, setShowLowOnly] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<SparePartInsert>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,7 +42,7 @@ export function SpareParts() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = parts.filter(p => {
+  const filtered = parts.filter((p: any) => {
     const matchSearch = !search ||
       p.part_name.toLowerCase().includes(search.toLowerCase()) ||
       p.part_number?.toLowerCase().includes(search.toLowerCase()) ||
@@ -53,9 +56,21 @@ export function SpareParts() {
   const totalValue = parts.reduce((sum, p) => sum + (p.quantity_in_stock * (p.unit_cost || 0)), 0);
 
   const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (p: SparePart) => {
+  const openEdit = (p: SparePart & { attachment_url?: string | null; attachment_name?: string | null }) => {
     const { id, created_at, ...rest } = p;
     setForm(rest); setEditId(id); setModalOpen(true);
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `sparepart_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(fileName, file);
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
+    }
+    setUploading(false);
   };
 
   const save = async () => {
@@ -77,7 +92,7 @@ export function SpareParts() {
     load();
   };
 
-  const update = <K extends keyof SparePartInsert>(key: K, value: SparePartInsert[K]) => {
+  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -98,12 +113,8 @@ export function SpareParts() {
         </div>
         <div className="flex items-center gap-3">
           {lowCount > 0 && (
-            <button
-              onClick={() => setShowLowOnly(!showLowOnly)}
-              className={`btn ${showLowOnly ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              <AlertTriangle className="h-4 w-4" />
-              {lowCount} Low Stock
+            <button onClick={() => setShowLowOnly(!showLowOnly)} className={`btn ${showLowOnly ? 'btn-primary' : 'btn-secondary'}`}>
+              <AlertTriangle className="h-4 w-4" /> {lowCount} Low Stock
             </button>
           )}
           <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
@@ -128,12 +139,13 @@ export function SpareParts() {
                 <th>Min Stock</th>
                 <th>Unit Cost</th>
                 <th>Supplier</th>
+                <th>Doc</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
+              {filtered.map((p: any) => (
                 <tr key={p.id}>
                   <td className="font-medium text-slate-800">{p.part_name}</td>
                   <td className="font-mono text-xs text-slate-500">{p.part_number || '—'}</td>
@@ -142,15 +154,18 @@ export function SpareParts() {
                   <td className="text-slate-500">{p.minimum_stock}</td>
                   <td>{p.unit_cost ? `$${p.unit_cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}</td>
                   <td>{p.supplier || '—'}</td>
+                  <td>
+                    {p.attachment_url ? (
+                      <a href={p.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
+                        <ExternalLink className="h-3.5 w-3.5" /> View
+                      </a>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td>{stockBadge(p)}</td>
                   <td>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(p)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => setDeleteId(p.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <button onClick={() => openEdit(p)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => setDeleteId(p.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -162,46 +177,34 @@ export function SpareParts() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Spare Part' : 'Add Spare Part'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2"><label className="label">Part Name *</label><input className="input" value={form.part_name} onChange={e => update('part_name', e.target.value)} placeholder="e.g., Brake Pads" /></div>
+          <div><label className="label">Part Number</label><input className="input" value={form.part_number || ''} onChange={e => update('part_number', e.target.value)} /></div>
+          <div><label className="label">Category</label><input className="input" value={form.category || ''} onChange={e => update('category', e.target.value)} /></div>
+          <div><label className="label">Quantity In Stock</label><input type="number" className="input" value={form.quantity_in_stock} onChange={e => update('quantity_in_stock', e.target.value ? Number(e.target.value) : 0)} /></div>
+          <div><label className="label">Minimum Stock</label><input type="number" className="input" value={form.minimum_stock} onChange={e => update('minimum_stock', e.target.value ? Number(e.target.value) : 0)} /></div>
+          <div><label className="label">Unit Cost ($)</label><input type="number" className="input" value={form.unit_cost ?? ''} onChange={e => update('unit_cost', e.target.value ? Number(e.target.value) : null)} /></div>
+          <div><label className="label">Supplier</label><input className="input" value={form.supplier || ''} onChange={e => update('supplier', e.target.value)} /></div>
+          <div><label className="label">Vehicle Compatibility</label><input className="input" value={form.vehicle_compatibility || ''} onChange={e => update('vehicle_compatibility', e.target.value)} /></div>
+          <div><label className="label">Last Restocked</label><input type="date" className="input" value={form.last_restocked || ''} onChange={e => update('last_restocked', e.target.value || null)} /></div>
           <div className="sm:col-span-2">
-            <label className="label">Part Name *</label>
-            <input className="input" value={form.part_name} onChange={e => update('part_name', e.target.value)} placeholder="e.g., Brake Pads" />
+            <label className="label">Upload Supplier Invoice / Receipt</label>
+            <div className="flex items-center gap-2">
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" />
+                {uploading ? 'Uploading...' : 'Choose File'}
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUpload(file);
+                }} />
+              </label>
+              {form.attachment_url && (
+                <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                  <ExternalLink className="h-4 w-4" /> {form.attachment_name || 'View document'}
+                </a>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="label">Part Number</label>
-            <input className="input" value={form.part_number || ''} onChange={e => update('part_number', e.target.value)} placeholder="e.g., BP-2024-001" />
-          </div>
-          <div>
-            <label className="label">Category</label>
-            <input className="input" value={form.category || ''} onChange={e => update('category', e.target.value)} placeholder="e.g., Brakes" />
-          </div>
-          <div>
-            <label className="label">Quantity In Stock</label>
-            <input type="number" className="input" value={form.quantity_in_stock} onChange={e => update('quantity_in_stock', e.target.value ? Number(e.target.value) : 0)} />
-          </div>
-          <div>
-            <label className="label">Minimum Stock</label>
-            <input type="number" className="input" value={form.minimum_stock} onChange={e => update('minimum_stock', e.target.value ? Number(e.target.value) : 0)} />
-          </div>
-          <div>
-            <label className="label">Unit Cost ($)</label>
-            <input type="number" className="input" value={form.unit_cost ?? ''} onChange={e => update('unit_cost', e.target.value ? Number(e.target.value) : null)} />
-          </div>
-          <div>
-            <label className="label">Supplier</label>
-            <input className="input" value={form.supplier || ''} onChange={e => update('supplier', e.target.value)} placeholder="e.g., Waingo Auto Garage" />
-          </div>
-          <div>
-            <label className="label">Vehicle Compatibility</label>
-            <input className="input" value={form.vehicle_compatibility || ''} onChange={e => update('vehicle_compatibility', e.target.value)} placeholder="e.g., Isuzu FRR, Mitsubishi Canter" />
-          </div>
-          <div>
-            <label className="label">Last Restocked</label>
-            <input type="date" className="input" value={form.last_restocked || ''} onChange={e => update('last_restocked', e.target.value || null)} />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">Notes</label>
-            <textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} />
-          </div>
+          <div className="sm:col-span-2"><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} /></div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
