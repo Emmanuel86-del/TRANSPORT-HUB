@@ -8,7 +8,7 @@ import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
 
 const emptyForm: DriverInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   name: '',
-  phone_number: '',
+  phone: '',
   license_number: '',
   license_expiry: '',
   national_id: '',
