@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Route, Search, Trash2, Edit, Filter, Calculator } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { Trip, Driver, Vehicle, TripInsert, RouteRate } from '@/types';
+import { Trip, Driver, Vehicle, TripInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -53,6 +54,7 @@ export function Trips() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<TripInsert>(emptyForm);
+  const [documents, setDocuments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [calcResult, setCalcResult] = useState<number | null>(null);
@@ -76,7 +78,6 @@ export function Trips() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-calculate trip sequence for today based on vehicle + date
   const autoCalcTripSequence = useCallback(async (vehicleId: string | null, tripDate: string, excludeId: string | null) => {
     if (!vehicleId || !tripDate) return;
     let query = supabase.from('trips').select('id').eq('vehicle_id', vehicleId).eq('trip_date', tripDate);
@@ -88,7 +89,6 @@ export function Trips() {
     setForm(prev => ({ ...prev, trip_sequence: seq }));
   }, []);
 
-  // Payment calculator: look up route_rates
   const calculatePayment = useCallback(async () => {
     const { origin, destination, cargo_type, container_state, trip_sequence, from_location, to_location } = form;
     const useOrigin = from_location || origin;
@@ -99,7 +99,6 @@ export function Trips() {
       return;
     }
 
-    // Try direct match first, then reverse (bidirectional)
     const { data: directMatch } = await supabase
       .from('route_rates')
       .select('*')
@@ -108,7 +107,9 @@ export function Trips() {
       .eq('cargo_type', cargo_type || 'general')
       .eq('trip_sequence', trip_sequence);
 
-    let match = (directMatch || []).find(r => r.container_state === container_state) || (directMatch || []).find(r => r.container_state === null) || (directMatch || [])[0];
+    let match = (directMatch || []).find(r => r.container_state === container_state)
+      || (directMatch || []).find(r => r.container_state === null)
+      || (directMatch || [])[0];
 
     if (!match) {
       const { data: reverseMatch } = await supabase
@@ -120,12 +121,16 @@ export function Trips() {
         .eq('trip_sequence', trip_sequence)
         .eq('is_bidirectional', true);
 
-      match = (reverseMatch || []).find(r => r.container_state === container_state) || (reverseMatch || []).find(r => r.container_state === null) || (reverseMatch || [])[0];
+      match = (reverseMatch || []).find(r => r.container_state === container_state)
+        || (reverseMatch || []).find(r => r.container_state === null)
+        || (reverseMatch || [])[0];
     }
 
     if (match) {
       setCalcResult(match.rate_amount);
-      const direction = match.origin === useOrigin ? `${match.origin} → ${match.destination}` : `${match.destination} → ${match.origin}`;
+      const direction = match.origin === useOrigin
+        ? `${match.origin} → ${match.destination}`
+        : `${match.destination} → ${match.origin}`;
       setCalcInfo(`Matched: ${direction} · ${match.cargo_type}${match.container_state ? ` (${match.container_state})` : ''} · ${trip_sequence === '3rd_plus' ? '3rd+' : trip_sequence} trip`);
       setForm(prev => ({ ...prev, mileage_payment: match.rate_amount }));
     } else {
@@ -134,7 +139,6 @@ export function Trips() {
     }
   }, [form]);
 
-  // Recalculate when key fields change
   useEffect(() => {
     if (modalOpen) calculatePayment();
   }, [modalOpen, form.from_location, form.to_location, form.origin, form.destination, form.cargo_type, form.container_state, form.trip_sequence, calculatePayment]);
@@ -153,6 +157,7 @@ export function Trips() {
 
   const openAdd = () => {
     setForm(emptyForm);
+    setDocuments([]);
     setEditId(null);
     setCalcResult(null);
     setCalcInfo('');
@@ -161,8 +166,9 @@ export function Trips() {
   };
 
   const openEdit = (trip: Trip) => {
-    const { id, created_at, driver, vehicle, ...rest } = trip;
+    const { id, created_at, driver, vehicle, ...rest } = trip as any;
     setForm(rest);
+    setDocuments(rest.documents || []);
     setEditId(id);
     setCalcResult(null);
     setCalcInfo('');
@@ -174,6 +180,7 @@ export function Trips() {
     setSaving(true);
     const data = {
       ...form,
+      documents,
       driver_id: form.driver_id || null,
       vehicle_id: form.vehicle_id || null,
     };
@@ -248,6 +255,7 @@ export function Trips() {
                 <th>Seq</th>
                 <th>Mileage Pay</th>
                 <th>Freight</th>
+                <th>Docs</th>
                 <th>Status</th>
                 <th></th>
               </tr>
@@ -267,6 +275,15 @@ export function Trips() {
                   <td className="text-slate-600">{trip.trip_sequence === '3rd_plus' ? '3rd+' : trip.trip_sequence || '—'}</td>
                   <td className="font-semibold text-blue-600">{trip.mileage_payment ? `${trip.mileage_payment.toLocaleString()} KES` : '—'}</td>
                   <td className="font-semibold text-emerald-600">{trip.freight_amount ? `${trip.freight_amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}</td>
+                  <td>
+                    {((trip as any).documents?.length > 0) ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-blue-600 font-medium">
+                        📎 {(trip as any).documents.length}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300 text-xs">—</span>
+                    )}
+                  </td>
                   <td>{statusBadge(trip.status)}</td>
                   <td>
                     <div className="flex items-center gap-1">
@@ -377,7 +394,9 @@ export function Trips() {
             </select>
           </div>
           <div>
-            <label className="label">Trip Sequence {todayTripCount > 0 && <span className="text-xs text-blue-500 ml-1">({todayTripCount} trip(s) today for this truck)</span>}</label>
+            <label className="label">
+              Trip Sequence {todayTripCount > 0 && <span className="text-xs text-blue-500 ml-1">({todayTripCount} trip(s) today for this truck)</span>}
+            </label>
             <select className="input" value={form.trip_sequence || '1st'} onChange={e => update('trip_sequence', e.target.value)}>
               <option value="1st">1st Trip</option>
               <option value="2nd">2nd Trip</option>
@@ -433,7 +452,18 @@ export function Trips() {
             <label className="label">Notes</label>
             <textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} />
           </div>
+
+          {/* --- Document Uploads --- */}
+          <div className="sm:col-span-3">
+            <DocumentUpload
+              folder="trips"
+              recordId={editId ?? 'new'}
+              existingDocs={documents}
+              onDocsChange={setDocuments}
+            />
+          </div>
         </div>
+
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
           <button onClick={save} disabled={saving} className="btn-primary">
