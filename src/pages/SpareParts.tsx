@@ -1,216 +1,263 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Wrench, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
+import { Wrench, AlertTriangle, Bell, Edit, Plus, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { SparePart, SparePartInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
-import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { LoadingSpinner, EmptyState } from '@/components/Shared';
 
-const emptyForm: SparePartInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
-  part_name: '',
-  part_number: '',
-  category: '',
-  quantity_in_stock: 0,
-  unit_cost: 0,
-  supplier: '',
-  notes: '',
-  attachment_url: null,
-  attachment_name: null,
-};
-
-function downloadTemplate() {
-  const headers = ['part_name', 'part_number', 'category', 'quantity_in_stock', 'unit_cost', 'supplier', 'notes'];
-  const sampleRow = ['Brake Pad', 'BP-992', 'Brakes', '15', '4500', 'AutoSpares Ltd', 'Sample part'];
-  const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `spare_parts_bulk_template.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+interface SparePart {
+  id: string;
+  name: string;
+  category: 'tyres' | 'batteries' | 'general';
+  quantity: number;
+  unit_price: number;
+  vehicle_plate?: string;
+  serial_number?: string;
+  manufacturer?: string;
+  installation_date?: string;
+  guarantee_months?: number;
 }
 
 export function SpareParts() {
   const [loading, setLoading] = useState(true);
   const [parts, setParts] = useState<SparePart[]>([]);
-  const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [bulkUploading, setBulkUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'tyres' | 'batteries' | 'general'>('all');
 
-  const load = useCallback(async () => {
+  const emptyForm = {
+    name: '',
+    category: 'general' as 'tyres' | 'batteries' | 'general',
+    quantity: 0,
+    unit_price: 0,
+    vehicle_plate: '',
+    serial_number: '',
+    manufacturer: '',
+    installation_date: '',
+    guarantee_months: 12,
+  };
+
+  const [form, setForm] = useState(emptyForm);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('spare_parts').select('*').order('part_name', { ascending: true });
+    const { data } = await supabase.from('spare_parts').select('*').order('name');
     setParts(data || []);
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const filtered = parts.filter(p => !search || p.part_name.toLowerCase().includes(search.toLowerCase()) || p.part_number?.toLowerCase().includes(search.toLowerCase()));
-
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (p: any) => { const { id, created_at, ...rest } = p; setForm(rest); setEditId(id); setModalOpen(true); };
-
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split('.').pop();
-    const fileName = `part_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('documents').upload(fileName, file);
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
-    }
-    setUploading(false);
+  // Notifier logic based on custom thresholds
+  const getStockStatus = (part: SparePart) => {
+    if (part.category === 'tyres' && part.quantity < 5) return 'low-tyre';
+    if (part.category === 'batteries' && part.quantity < 3) return 'low-battery';
+    if (part.category === 'general' && part.quantity < 10) return 'low-general';
+    return 'ok';
   };
 
-  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBulkUploading(true);
-    const text = await file.text();
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) { alert('File is empty.'); setBulkUploading(false); return; }
+  const lowStockItems = parts.filter(p => getStockStatus(p) !== 'ok');
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    const rows = lines.slice(1).map(line => {
-      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
-      const obj: any = {};
-      headers.forEach((h, i) => { obj[h] = values[i] || null; });
-      return {
-        part_name: obj.part_name || 'Unnamed Part',
-        part_number: obj.part_number || '',
-        category: obj.category || '',
-        quantity_in_stock: Number(obj.quantity_in_stock) || 0,
-        unit_cost: Number(obj.unit_cost) || 0,
-        supplier: obj.supplier || '',
-        notes: obj.notes || '',
-      };
-    });
-
-    const { error } = await supabase.from('spare_parts').insert(rows);
-    setBulkUploading(false);
-    if (error) alert('Error: ' + error.message);
-    else { setBulkModalOpen(false); load(); }
-  };
-
-  const save = async () => {
+  const savePart = async () => {
     setSaving(true);
-    if (editId) await supabase.from('spare_parts').update(form).eq('id', editId);
-    else await supabase.from('spare_parts').insert(form);
-    setSaving(false); setModalOpen(false); load();
+    if (editId) {
+      await supabase.from('spare_parts').update(form).eq('id', editId);
+    } else {
+      await supabase.from('spare_parts').insert(form);
+    }
+    setSaving(false);
+    setModalOpen(false);
+    loadData();
   };
 
-  const confirmDelete = async () => {
-    if (!deleteId) return;
-    await supabase.from('spare_parts').delete().eq('id', deleteId);
-    setDeleteId(null); load();
-  };
-
-  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-  };
+  const filteredParts = activeTab === 'all' ? parts : parts.filter(p => p.category === activeTab);
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Spare Parts Inventory" subtitle="Stock levels, unit costs, and spare parts catalog" icon={<Wrench className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Part" />
+      <PageHeader 
+        title="Spare Parts & Inventory Notifier" 
+        subtitle="Manage Tyres, Batteries, and General Spares with Automated Stock Threshold Alerts" 
+        icon={<Wrench className="h-6 w-6" />} 
+        onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
+        addLabel="Add Spare Part" 
+      />
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input className="input pl-9" placeholder="Search parts..." value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Stock Notifier Alert Banner */}
+      {lowStockItems.length > 0 && (
+        <div className="rounded-xl bg-red-50 border border-red-200 p-4 flex items-start gap-3 shadow-sm">
+          <Bell className="h-5 w-5 text-red-600 mt-0.5 animate-bounce" />
+          <div>
+            <h4 className="text-sm font-bold text-red-900">Low Stock Inventory Notifier</h4>
+            <p className="text-sm text-red-700 mt-0.5">
+              You have <span className="font-semibold">{lowStockItems.length}</span> item(s) below required stock thresholds (Tyres &lt; 5, Batteries &lt; 3, General &lt; 10):
+            </p>
+            <ul className="mt-2 space-y-1 text-xs text-red-600 list-disc list-inside">
+              {lowStockItems.map(item => (
+                <li key={item.id}>
+                  <span className="font-semibold">{item.name}</span> ({item.category.toUpperCase()}): Current Quantity: <span className="underline font-bold">{item.quantity}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-        <button onClick={() => setBulkModalOpen(true)} className="btn btn-secondary self-start sm:self-auto">
-          <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Bulk Excel Upload
-        </button>
+      )}
+
+      {/* Category Tabs */}
+      <div className="flex gap-2 border-b border-slate-200 pb-3">
+        {(['all', 'tyres', 'batteries', 'general'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium capitalize transition-all ${
+              activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            {tab} {tab === 'tyres' && '(< 5)'} {tab === 'batteries' && '(< 3)'} {tab === 'general' && '(< 10)'}
+          </button>
+        ))}
       </div>
 
-      {loading ? <LoadingSpinner message="Loading spare parts..." /> : filtered.length === 0 ? (
-        <div className="card"><EmptyState icon={<Wrench className="h-8 w-8" />} title="No spare parts found" message="Add inventory parts to manage stock levels." /></div>
+      {loading ? (
+        <LoadingSpinner message="Loading spare parts inventory..." />
+      ) : filteredParts.length === 0 ? (
+        <div className="card">
+          <EmptyState icon={<Package className="h-8 w-8" />} title="No spare parts found" message="Add items to track tyres, batteries, and general supplies." />
+        </div>
       ) : (
         <div className="card table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>Part Name</th><th>Part Number</th><th>Category</th><th>Stock</th><th>Unit Cost</th><th>Supplier</th><th>Doc</th><th></th></tr>
+              <tr>
+                <th>Part Name</th>
+                <th>Category</th>
+                <th>Quantity</th>
+                <th>Specific Details (Tyre / Battery)</th>
+                <th>Unit Price</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
-              {filtered.map((p: any) => (
-                <tr key={p.id}>
-                  <td className="font-semibold text-slate-800">{p.part_name}</td>
-                  <td className="font-mono text-xs">{p.part_number || '—'}</td>
-                  <td>{p.category || '—'}</td>
-                  <td>{p.quantity_in_stock}</td>
-                  <td>{p.unit_cost?.toLocaleString() || '—'}</td>
-                  <td>{p.supplier || '—'}</td>
-                  <td>
-                    {p.attachment_url ? (
-                      <a href={p.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
-                        <ExternalLink className="h-3.5 w-3.5" /> View
-                      </a>
-                    ) : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(p)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => setDeleteId(p.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredParts.map(p => {
+                const status = getStockStatus(p);
+                return (
+                  <tr key={p.id}>
+                    <td className="font-semibold text-slate-800">{p.name}</td>
+                    <td>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase ${
+                        p.category === 'tyres' ? 'bg-blue-100 text-blue-700' : p.category === 'batteries' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {p.category}
+                      </span>
+                    </td>
+                    <td className="font-bold text-slate-900">{p.quantity}</td>
+                    <td className="text-xs text-slate-600">
+                      {p.category === 'tyres' && (
+                        <div>Vehicle Plate: <span className="font-semibold">{p.vehicle_plate || '—'}</span></div>
+                      )}
+                      {p.category === 'batteries' && (
+                        <div>
+                          <div>Company: <span className="font-semibold">{p.manufacturer || '—'}</span></div>
+                          <div>Serial: <span className="font-semibold">{p.serial_number || '—'}</span></div>
+                          <div>Installed: {p.installation_date || '—'} ({p.guarantee_months || 12} mos guarantee)</div>
+                        </div>
+                      )}
+                      {p.category === 'general' && <span className="text-slate-400">Standard Inventory</span>}
+                    </td>
+                    <td>Ksh {p.unit_price?.toLocaleString()}</td>
+                    <td>
+                      {status !== 'ok' ? (
+                        <span className="badge-danger flex items-center gap-1 w-fit">
+                          <AlertTriangle className="h-3 w-3" /> Low Stock
+                        </span>
+                      ) : (
+                        <span className="badge-success w-fit">In Stock</span>
+                      )}
+                    </td>
+                    <td>
+                      <button 
+                        onClick={() => {
+                          setForm(p as any);
+                          setEditId(p.id);
+                          setModalOpen(true);
+                        }} 
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Bulk Upload Modal */}
-      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Spare Parts via Excel/CSV" size="md">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">Download the required template, fill in your parts stock, and upload the completed CSV file.</p>
-          <button onClick={downloadTemplate} className="btn btn-secondary w-full flex items-center justify-center gap-2">
-            <Download className="h-4 w-4 text-blue-600" /> Download Template
-          </button>
-          <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500">
-            <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-2" />
-            <span className="text-sm font-medium text-slate-700">{bulkUploading ? 'Importing...' : 'Click to select filled CSV file'}</span>
-            <input type="file" accept=".csv" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
-          </label>
-        </div>
-        <div className="mt-5 flex justify-end"><button onClick={() => setBulkModalOpen(false)} className="btn-secondary">Close</button></div>
-      </Modal>
-
       {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Spare Part' : 'Add Spare Part'} size="lg">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Spare Part' : 'Add New Spare Part'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div><label className="label">Part Name *</label><input className="input" value={form.part_name} onChange={e => update('part_name', e.target.value)} /></div>
-          <div><label className="label">Part Number</label><input className="input" value={form.part_number || ''} onChange={e => update('part_number', e.target.value)} /></div>
-          <div><label className="label">Category</label><input className="input" value={form.category || ''} onChange={e => update('category', e.target.value)} /></div>
-          <div><label className="label">Stock Quantity</label><input type="number" className="input" value={form.quantity_in_stock} onChange={e => update('quantity_in_stock', Number(e.target.value))} /></div>
-          <div><label className="label">Unit Cost</label><input type="number" className="input" value={form.unit_cost} onChange={e => update('unit_cost', Number(e.target.value))} /></div>
-          <div><label className="label">Supplier</label><input className="input" value={form.supplier || ''} onChange={e => update('supplier', e.target.value)} /></div>
-          <div className="sm:col-span-2">
-            <label className="label">Upload Document</label>
-            <div className="flex items-center gap-2">
-              <label className="btn btn-secondary cursor-pointer">
-                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-              </label>
-              {form.attachment_url && <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1"><ExternalLink className="h-4 w-4" /> View</a>}
-            </div>
+          <div>
+            <label className="label">Part Name *</label>
+            <input type="text" className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Bridgestone Tyre / Amarron Battery" />
           </div>
+
+          <div>
+            <label className="label">Category *</label>
+            <select className="input" value={form.category} onChange={e => setForm({ ...form, category: e.target.value as any })}>
+              <option value="general">General Spares (Alert &lt; 10)</option>
+              <option value="tyres">Tyres (Alert &lt; 5)</option>
+              <option value="batteries">Batteries (Alert &lt; 3)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Quantity in Stock *</label>
+            <input type="number" className="input" value={form.quantity} onChange={e => setForm({ ...form, quantity: parseInt(e.target.value) || 0 })} />
+          </div>
+
+          <div>
+            <label className="label">Unit Price (Ksh)</label>
+            <input type="number" className="input" value={form.unit_price} onChange={e => setForm({ ...form, unit_price: parseFloat(e.target.value) || 0 })} />
+          </div>
+
+          {/* Conditional Fields for Tyres */}
+          {form.category === 'tyres' && (
+            <div className="sm:col-span-2 border-t pt-3">
+              <label className="label">Vehicle Details / Plate Number</label>
+              <input type="text" className="input" value={form.vehicle_plate} onChange={e => setForm({ ...form, vehicle_plate: e.target.value })} placeholder="e.g. KAA 001A" />
+            </div>
+          )}
+
+          {/* Conditional Fields for Batteries */}
+          {form.category === 'batteries' && (
+            <div className="sm:col-span-2 border-t pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Manufacturer / Company</label>
+                <input type="text" className="input" value={form.manufacturer} onChange={e => setForm({ ...form, manufacturer: e.target.value })} placeholder="e.g. Chloride Exide" />
+              </div>
+              <div>
+                <label className="label">Serial Number</label>
+                <input type="text" className="input" value={form.serial_number} onChange={e => setForm({ ...form, serial_number: e.target.value })} placeholder="e.g. SN-987654321" />
+              </div>
+              <div>
+                <label className="label">Installation Date</label>
+                <input type="date" className="input" value={form.installation_date} onChange={e => setForm({ ...form, installation_date: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Guarantee Period (Months)</label>
+                <input type="number" className="input" value={form.guarantee_months} onChange={e => setForm({ ...form, guarantee_months: parseInt(e.target.value) || 12 })} />
+              </div>
+            </div>
+          )}
         </div>
+
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
-          <button onClick={save} disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
+          <button onClick={savePart} disabled={saving || !form.name} className="btn-primary">{saving ? 'Saving...' : 'Save Spare Part'}</button>
         </div>
       </Modal>
-
-      <ConfirmDialog open={!!deleteId} title="Delete Part" message="Are you sure?" onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
     </div>
   );
 }
