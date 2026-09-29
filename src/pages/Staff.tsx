@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { UserCog, Search, Trash2, Edit, Download } from 'lucide-react';
+import { UserCog, Search, Trash2, Edit, Download, Upload, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Employee, EmployeeInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
 
-const emptyForm: EmployeeInsert = {
+const emptyForm: EmployeeInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   name: '',
   designation: '',
   kra_pin: '',
@@ -16,6 +16,8 @@ const emptyForm: EmployeeInsert = {
   phone_number: '',
   status: 'active',
   notes: '',
+  attachment_url: null,
+  attachment_name: null,
 };
 
 function exportCSV(employees: Employee[]) {
@@ -49,9 +51,10 @@ export function Staff() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<EmployeeInsert>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,9 +76,21 @@ export function Staff() {
   });
 
   const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (e: Employee) => {
+  const openEdit = (e: Employee & { attachment_url?: string | null; attachment_name?: string | null }) => {
     const { id, created_at, ...rest } = e;
     setForm(rest); setEditId(id); setModalOpen(true);
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `staff_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(fileName, file);
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
+    }
+    setUploading(false);
   };
 
   const save = async () => {
@@ -97,7 +112,7 @@ export function Staff() {
     load();
   };
 
-  const update = <K extends keyof EmployeeInsert>(key: K, value: EmployeeInsert[K]) => {
+  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -126,13 +141,8 @@ export function Staff() {
             <option value="on_leave">On Leave</option>
             <option value="inactive">Inactive</option>
           </select>
-          <button
-            onClick={() => exportCSV(filtered)}
-            disabled={filtered.length === 0}
-            className="btn btn-secondary"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
+          <button onClick={() => exportCSV(employees)} disabled={filtered.length === 0} className="btn btn-secondary">
+            <Download className="h-4 w-4" /> Export CSV
           </button>
         </div>
       </div>
@@ -153,12 +163,13 @@ export function Staff() {
                 <th>SHA No.</th>
                 <th>National ID</th>
                 <th>Phone</th>
+                <th>Doc</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(e => (
+              {filtered.map((e: any) => (
                 <tr key={e.id}>
                   <td className="font-medium text-slate-800">{e.name}</td>
                   <td>{e.designation || '—'}</td>
@@ -167,6 +178,13 @@ export function Staff() {
                   <td className="font-mono text-xs text-slate-500">{e.sha_number || '—'}</td>
                   <td className="font-mono text-xs text-slate-500">{e.national_id || '—'}</td>
                   <td>{e.phone_number || '—'}</td>
+                  <td>
+                    {e.attachment_url ? (
+                      <a href={e.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
+                        <ExternalLink className="h-3.5 w-3.5" /> View
+                      </a>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td>{statusBadge(e.status)}</td>
                   <td>
                     <div className="flex items-center gap-1">
@@ -222,6 +240,24 @@ export function Staff() {
           <div>
             <label className="label">Phone Number</label>
             <input className="input" value={form.phone_number || ''} onChange={e => update('phone_number', e.target.value)} placeholder="e.g., +254700111222" />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Upload Document (KRA / ID / Contract)</label>
+            <div className="flex items-center gap-2">
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" />
+                {uploading ? 'Uploading...' : 'Choose File'}
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUpload(file);
+                }} />
+              </label>
+              {form.attachment_url && (
+                <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                  <ExternalLink className="h-4 w-4" /> {form.attachment_name || 'View document'}
+                </a>
+              )}
+            </div>
           </div>
           <div className="sm:col-span-2">
             <label className="label">Notes</label>
