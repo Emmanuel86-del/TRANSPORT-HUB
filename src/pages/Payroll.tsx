@@ -1,5 +1,6 @@
+
 import { useEffect, useState, useCallback } from 'react';
-import { Wallet, Search, Trash2, Edit, Calculator } from 'lucide-react';
+import { Wallet, Search, Trash2, Edit, Calculator, Upload, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PayrollRecord, PayrollRecordInsert, Employee } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -15,7 +16,7 @@ const statusBadge = (status: string) => {
   }
 };
 
-const emptyForm: PayrollRecordInsert = {
+const emptyForm: PayrollRecordInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   employee_id: null,
   payee_name: '',
   pay_period_start: '',
@@ -27,6 +28,8 @@ const emptyForm: PayrollRecordInsert = {
   payment_method: 'bank_transfer',
   status: 'pending',
   notes: '',
+  attachment_url: null,
+  attachment_name: null,
 };
 
 export function Payroll() {
@@ -37,9 +40,10 @@ export function Payroll() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<PayrollRecordInsert>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,7 +58,7 @@ export function Payroll() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = records.filter(r => {
+  const filtered = records.filter((r: any) => {
     const matchSearch = !search ||
       r.payee_name.toLowerCase().includes(search.toLowerCase()) ||
       r.notes?.toLowerCase().includes(search.toLowerCase());
@@ -67,9 +71,21 @@ export function Payroll() {
   const totalNet = filtered.reduce((s, r) => s + (r.net_salary || 0), 0);
 
   const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (r: PayrollRecord) => {
+  const openEdit = (r: PayrollRecord & { attachment_url?: string | null; attachment_name?: string | null }) => {
     const { id, created_at, employee, ...rest } = r;
     setForm(rest); setEditId(id); setModalOpen(true);
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `payroll_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(fileName, file);
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
+    }
+    setUploading(false);
   };
 
   const save = async () => {
@@ -92,7 +108,7 @@ export function Payroll() {
     load();
   };
 
-  const update = <K extends keyof PayrollRecordInsert>(key: K, value: PayrollRecordInsert[K]) => {
+  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -113,20 +129,10 @@ export function Payroll() {
     <div className="space-y-5 animate-fade-in">
       <PageHeader title="Payroll" subtitle="Salary and payment records" icon={<Wallet className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Record" />
 
-      {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="card p-4">
-          <p className="text-xs text-slate-400">Total Gross</p>
-          <p className="text-lg font-bold text-slate-700 mt-1">{totalGross.toLocaleString()} KES</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-slate-400">Total Deductions</p>
-          <p className="text-lg font-bold text-amber-600 mt-1">{totalDeductions.toLocaleString()} KES</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-slate-400">Total Net</p>
-          <p className="text-lg font-bold text-blue-600 mt-1">{totalNet.toLocaleString()} KES</p>
-        </div>
+        <div className="card p-4"><p className="text-xs text-slate-400">Total Gross</p><p className="text-lg font-bold text-slate-700 mt-1">{totalGross.toLocaleString()} KES</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-400">Total Deductions</p><p className="text-lg font-bold text-amber-600 mt-1">{totalDeductions.toLocaleString()} KES</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-400">Total Net</p><p className="text-lg font-bold text-blue-600 mt-1">{totalNet.toLocaleString()} KES</p></div>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -158,12 +164,13 @@ export function Payroll() {
                 <th>Deductions</th>
                 <th>Net (KES)</th>
                 <th>Method</th>
+                <th>Doc</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(r => (
+              {filtered.map((r: any) => (
                 <tr key={r.id}>
                   <td className="font-medium text-slate-800 whitespace-nowrap">{r.pay_date}</td>
                   <td className="text-slate-700">{r.payee_name}</td>
@@ -172,15 +179,18 @@ export function Payroll() {
                   <td className="text-amber-600">{r.deductions.toLocaleString()}</td>
                   <td className="font-semibold text-blue-600">{r.net_salary.toLocaleString()}</td>
                   <td className="text-slate-600 capitalize text-sm">{r.payment_method.replace('_', ' ')}</td>
+                  <td>
+                    {r.attachment_url ? (
+                      <a href={r.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
+                        <ExternalLink className="h-3.5 w-3.5" /> View
+                      </a>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td>{statusBadge(r.status)}</td>
                   <td>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => setDeleteId(r.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                      <button onClick={() => setDeleteId(r.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -199,37 +209,17 @@ export function Payroll() {
               {employees.map(e => <option key={e.id} value={e.id}>{e.name} — {e.designation || 'Staff'}</option>)}
             </select>
           </div>
-          <div>
-            <label className="label">Payee Name *</label>
-            <input className="input" value={form.payee_name} onChange={e => update('payee_name', e.target.value)} placeholder="Full name" />
-          </div>
-          <div>
-            <label className="label">Pay Date *</label>
-            <input type="date" className="input" value={form.pay_date} onChange={e => update('pay_date', e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Pay Period Start</label>
-            <input type="date" className="input" value={form.pay_period_start || ''} onChange={e => update('pay_period_start', e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Pay Period End</label>
-            <input type="date" className="input" value={form.pay_period_end || ''} onChange={e => update('pay_period_end', e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Gross Salary (KES)</label>
-            <input type="number" className="input" value={form.gross_salary} onChange={e => update('gross_salary', Number(e.target.value))} onBlur={calcNet} />
-          </div>
-          <div>
-            <label className="label">Deductions (KES)</label>
-            <input type="number" className="input" value={form.deductions} onChange={e => update('deductions', Number(e.target.value))} onBlur={calcNet} />
-          </div>
+          <div><label className="label">Payee Name *</label><input className="input" value={form.payee_name} onChange={e => update('payee_name', e.target.value)} /></div>
+          <div><label className="label">Pay Date *</label><input type="date" className="input" value={form.pay_date} onChange={e => update('pay_date', e.target.value)} /></div>
+          <div><label className="label">Pay Period Start</label><input type="date" className="input" value={form.pay_period_start || ''} onChange={e => update('pay_period_start', e.target.value)} /></div>
+          <div><label className="label">Pay Period End</label><input type="date" className="input" value={form.pay_period_end || ''} onChange={e => update('pay_period_end', e.target.value)} /></div>
+          <div><label className="label">Gross Salary (KES)</label><input type="number" className="input" value={form.gross_salary} onChange={e => update('gross_salary', Number(e.target.value))} onBlur={calcNet} /></div>
+          <div><label className="label">Deductions (KES)</label><input type="number" className="input" value={form.deductions} onChange={e => update('deductions', Number(e.target.value))} onBlur={calcNet} /></div>
           <div>
             <label className="label">Net Salary (KES)</label>
             <div className="flex items-center gap-2">
               <input type="number" className="input bg-slate-50" value={form.net_salary} onChange={e => update('net_salary', Number(e.target.value))} />
-              <button type="button" onClick={calcNet} className="rounded-lg p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors shrink-0">
-                <Calculator className="h-4 w-4" />
-              </button>
+              <button type="button" onClick={calcNet} className="rounded-lg p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors shrink-0"><Calculator className="h-4 w-4" /></button>
             </div>
           </div>
           <div>
@@ -250,9 +240,24 @@ export function Payroll() {
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="label">Notes</label>
-            <textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} />
+            <label className="label">Upload Payment Slip / Receipt</label>
+            <div className="flex items-center gap-2">
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" />
+                {uploading ? 'Uploading...' : 'Choose File'}
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUpload(file);
+                }} />
+              </label>
+              {form.attachment_url && (
+                <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                  <ExternalLink className="h-4 w-4" /> {form.attachment_name || 'View document'}
+                </a>
+              )}
+            </div>
           </div>
+          <div className="sm:col-span-2"><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} /></div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
