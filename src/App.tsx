@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
   Calculator, ClipboardList, Scale, FileText, Wallet,
-  Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon, ShieldCheck,
+  Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon, ShieldCheck, UserCheck,
 } from 'lucide-react';
 import { useAuth, AuthProvider } from '@/lib/auth';
 import { AuthPage } from '@/pages/AuthPage';
@@ -11,6 +11,7 @@ import { Trips } from '@/pages/Trips';
 import { Vehicles } from '@/pages/Vehicles';
 import { FleetCompliance } from '@/pages/FleetCompliance';
 import { Drivers } from '@/pages/Drivers';
+import { DriverCompliance } from '@/pages/DriverCompliance';
 import { Products } from '@/pages/Products';
 import { SpareParts } from '@/pages/SpareParts';
 import { WorkRecords } from '@/pages/WorkRecords';
@@ -23,7 +24,7 @@ import { Payroll } from '@/pages/Payroll';
 import { LoadingSpinner } from '@/components/Shared';
 import { UserRole, hasAccess } from '@/types';
 
-type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'fleet-compliance' | 'drivers' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'products' | 'spare-parts' | 'work-records';
+type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'fleet-compliance' | 'drivers' | 'driver-compliance' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'products' | 'spare-parts' | 'work-records';
 
 type NavItem = { id: Page; label: string; icon: React.ReactNode; minRole: UserRole };
 
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { id: 'vehicles', label: 'Fleet Vehicles', icon: <Truck className="h-5 w-5" />, minRole: 'employee' },
   { id: 'fleet-compliance', label: 'Fleet Compliance', icon: <ShieldCheck className="h-5 w-5" />, minRole: 'employee' },
   { id: 'drivers', label: 'Drivers', icon: <Users className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'driver-compliance', label: 'Driver Compliance', icon: <UserCheck className="h-5 w-5" />, minRole: 'employee' },
   { id: 'weighbridge', label: 'Weighbridge', icon: <Scale className="h-5 w-5" />, minRole: 'employee' },
   { id: 'products', label: 'Products', icon: <Package className="h-5 w-5" />, minRole: 'employee' },
   { id: 'spare-parts', label: 'Spare Parts', icon: <Wrench className="h-5 w-5" />, minRole: 'employee' },
@@ -204,6 +206,7 @@ function AppContent() {
           {page === 'vehicles' && <Vehicles />}
           {page === 'fleet-compliance' && <FleetCompliance />}
           {page === 'drivers' && <Drivers />}
+          {page === 'driver-compliance' && <DriverCompliance />}
           {page === 'staff' && canAccess('manager') && <Staff />}
           {page === 'rate-matrix' && canAccess('corporate_admin') && <RateMatrix />}
           {page === 'weighbridge' && <Weighbridge />}
@@ -222,7 +225,7 @@ function App() {
   return (
     <AuthProvider>
       <AppContent />
-    </AuthProvider>
+    </AuthAuthProvider>
   );
 }
 
