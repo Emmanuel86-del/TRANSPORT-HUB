@@ -31,7 +31,7 @@ function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
-export function Fleets() {
+export function Vehicles() {
   const [loading, setLoading] = useState(true);
   const [fleets, setFleets] = useState<Fleet[]>([]);
   const [search, setSearch] = useState('');
@@ -82,7 +82,7 @@ export function Fleets() {
 
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
     const rows = lines.slice(1).map(line => {
-      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
+      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"\vert{}"$/g, ''));
       const obj: any = {};
       headers.forEach((h, i) => { obj[h] = values[i] || null; });
       return {
@@ -121,7 +121,7 @@ export function Fleets() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Fleet Management" subtitle="Vehicle inventory, insurance, and inspection tracking" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" />
+      <PageHeader title="Vehicle Management" subtitle="Vehicle inventory, insurance, and inspection tracking" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" />
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -133,7 +133,7 @@ export function Fleets() {
         </button>
       </div>
 
-      {loading ? <LoadingSpinner message="Loading fleet..." /> : filtered.length === 0 ? (
+      {loading ? <LoadingSpinner message="Loading vehicles..." /> : filtered.length === 0 ? (
         <div className="card"><EmptyState icon={<Truck className="h-8 w-8" />} title="No vehicles found" message="Add vehicles to manage your fleet register." /></div>
       ) : (
         <div className="card table-wrapper">
@@ -171,11 +171,11 @@ export function Fleets() {
       )}
 
       {/* Bulk Upload Modal */}
-      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Fleet via Excel/CSV" size="md">
+      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Vehicles via Excel/CSV" size="md">
         <div className="space-y-4">
-          <p className="text-sm text-slate-600">Download the required template, fill in your fleet records, and upload the completed CSV file.</p>
+          <p className="text-sm text-slate-600">Download the required template, fill in your vehicle records, and upload the completed CSV file.</p>
           <button onClick={downloadTemplate} className="btn btn-secondary w-full flex items-center justify-center gap-2">
-            <Download className="h-4 w-4 text-blue-600" /> Download Fleet Template
+            <Download className="h-4 w-4 text-blue-600" /> Download Vehicles Template
           </button>
           <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500">
             <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-2" />
