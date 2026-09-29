@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
   Calculator, ClipboardList, Scale, FileText, Wallet,
-  Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon,
+  Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon, ShieldCheck,
 } from 'lucide-react';
 import { useAuth, AuthProvider } from '@/lib/auth';
 import { AuthPage } from '@/pages/AuthPage';
 import { Dashboard } from '@/pages/Dashboard';
 import { Trips } from '@/pages/Trips';
 import { Vehicles } from '@/pages/Vehicles';
+import { FleetCompliance } from '@/pages/FleetCompliance';
 import { Drivers } from '@/pages/Drivers';
 import { Products } from '@/pages/Products';
 import { SpareParts } from '@/pages/SpareParts';
@@ -22,7 +23,7 @@ import { Payroll } from '@/pages/Payroll';
 import { LoadingSpinner } from '@/components/Shared';
 import { UserRole, hasAccess } from '@/types';
 
-type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'drivers' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'products' | 'spare-parts' | 'work-records';
+type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'fleet-compliance' | 'drivers' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'products' | 'spare-parts' | 'work-records';
 
 type NavItem = { id: Page; label: string; icon: React.ReactNode; minRole: UserRole };
 
@@ -30,7 +31,8 @@ const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="h-5 w-5" />, minRole: 'employee' },
   { id: 'trips', label: 'Trips', icon: <Route className="h-5 w-5" />, minRole: 'employee' },
   { id: 'daily-dispatch', label: 'Daily Dispatch', icon: <ClipboardList className="h-5 w-5" />, minRole: 'employee' },
-  { id: 'vehicles', label: 'Fleet', icon: <Truck className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'vehicles', label: 'Fleet Vehicles', icon: <Truck className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'fleet-compliance', label: 'Fleet Compliance', icon: <ShieldCheck className="h-5 w-5" />, minRole: 'employee' },
   { id: 'drivers', label: 'Drivers', icon: <Users className="h-5 w-5" />, minRole: 'employee' },
   { id: 'weighbridge', label: 'Weighbridge', icon: <Scale className="h-5 w-5" />, minRole: 'employee' },
   { id: 'products', label: 'Products', icon: <Package className="h-5 w-5" />, minRole: 'employee' },
@@ -200,6 +202,7 @@ function AppContent() {
           {page === 'trips' && <Trips />}
           {page === 'daily-dispatch' && <DailyDispatch />}
           {page === 'vehicles' && <Vehicles />}
+          {page === 'fleet-compliance' && <FleetCompliance />}
           {page === 'drivers' && <Drivers />}
           {page === 'staff' && canAccess('manager') && <Staff />}
           {page === 'rate-matrix' && canAccess('corporate_admin') && <RateMatrix />}
