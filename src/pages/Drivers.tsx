@@ -19,7 +19,7 @@ const emptyForm: DriverInsert & { attachment_url?: string | null; attachment_nam
 };
 
 function downloadTemplate() {
-  const headers = ['name', 'phone_number', 'license_number', 'license_expiry', 'national_id', 'status', 'notes'];
+  const headers = ['name', 'phone', 'license_number', 'license_expiry', 'national_id', 'status', 'notes'];
   const sampleRow = ['Jane Smith', '+254711223344', 'DL-987654', '2028-05-12', '29112233', 'active', 'Primary driver'];
   const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -85,7 +85,7 @@ export function Drivers() {
       headers.forEach((h, i) => { obj[h] = values[i] || null; });
       return {
         name: obj.name || 'Unnamed Driver',
-        phone_number: obj.phone_number || '',
+        phone: obj.phone || '',
         license_number: obj.license_number || '',
         license_expiry: obj.license_expiry || null,
         national_id: obj.national_id || '',
@@ -143,7 +143,7 @@ export function Drivers() {
               {filtered.map((d: any) => (
                 <tr key={d.id}>
                   <td className="font-semibold text-slate-800">{d.name}</td>
-                  <td>{d.phone_number || '—'}</td>
+                  <td>{d.phone || '—'}</td>
                   <td className="font-mono text-xs">{d.license_number || '—'}</td>
                   <td className="text-xs text-slate-600">{d.license_expiry || '—'}</td>
                   <td className="font-mono text-xs">{d.national_id || '—'}</td>
@@ -188,7 +188,7 @@ export function Drivers() {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Driver' : 'Add Driver'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div><label className="label">Full Name *</label><input className="input" value={form.name} onChange={e => update('name', e.target.value)} /></div>
-          <div><label className="label">Phone Number</label><input className="input" value={form.phone_number || ''} onChange={e => update('phone_number', e.target.value)} /></div>
+          <div><label className="label">Phone Number</label><input className="input" value={form.phone || ''} onChange={e => update('phone', e.target.value)} /></div>
           <div><label className="label">License Number</label><input className="input" value={form.license_number || ''} onChange={e => update('license_number', e.target.value)} /></div>
           <div><label className="label">License Expiry</label><input type="date" className="input" value={form.license_expiry || ''} onChange={e => update('license_expiry', e.target.value)} /></div>
           <div><label className="label">National ID</label><input className="input" value={form.national_id || ''} onChange={e => update('national_id', e.target.value)} /></div>
