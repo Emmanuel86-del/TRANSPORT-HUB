@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
   Calculator, ClipboardList, Scale, FileText, Wallet,
@@ -20,7 +20,7 @@ import { Weighbridge } from '@/pages/Weighbridge';
 import { ClientDeliveries } from '@/pages/ClientDeliveries';
 import { Payroll } from '@/pages/Payroll';
 import { LoadingSpinner } from '@/components/Shared';
-import { UserRole, roleRank, hasAccess } from '@/types';
+import { UserRole, hasAccess } from '@/types';
 
 type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'drivers' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'products' | 'spare-parts' | 'work-records';
 
@@ -60,8 +60,25 @@ const roleLabel = (role: UserRole) => {
 
 function AppContent() {
   const { user, profile, loading, authError, signOut, retry } = useAuth();
-  const [page, setPage] = useState<Page>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Read initial page from URL hash or default to 'dashboard'
+  const getPageFromHash = (): Page => {
+    const hash = window.location.hash.replace('#/', '') as Page;
+    const validPages = navItems.map(i => i.id);
+    return validPages.includes(hash) ? hash : 'dashboard';
+  };
+
+  const [page, setPage] = useState<Page>(getPageFromHash);
+
+  // Listen to browser back/forward buttons
+  useEffect(() => {
+    const handleHashChange = () => {
+      setPage(getPageFromHash());
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   if (loading) {
     return (
@@ -86,6 +103,7 @@ function AppContent() {
   const canAccess = (minRole: UserRole) => hasAccess(userRole, minRole);
 
   const navigate = (p: Page) => {
+    window.location.hash = `#/${p}`;
     setPage(p);
     setSidebarOpen(false);
   };
