@@ -9,8 +9,6 @@ interface ComplianceRecord {
   id: string;
   vehicle_id: string;
   vehicle?: { plate_number: string; make_model: string };
-  insurance_start: string;
-  insurance_expiry: string;
   comesa_start: string;
   comesa_expiry: string;
   ntsa_inspection_start: string;
