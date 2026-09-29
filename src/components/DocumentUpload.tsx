@@ -32,12 +32,14 @@ export function DocumentUpload({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowed = [
-      'application/pdf', 
-      'image/jpeg', 
-      'image/png', 
-      'image/webp'
-    ];
+   const allowed = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel', // .xls
+];
     if (!allowed.includes(file.type)) {
       setError('Only PDF, JPG and PNG files are allowed.');
       return;
@@ -163,7 +165,7 @@ export function DocumentUpload({
       <input
         ref={fileRef}
         type="file"
-        accept=".pdf,.jpg,.jpeg,.png,.webp"
+        accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls"
         onChange={handleUpload}
         className="hidden"
       />
