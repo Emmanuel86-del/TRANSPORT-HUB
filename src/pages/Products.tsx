@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Package, Search, Trash2, Edit } from 'lucide-react';
+import { Package, Search, Trash2, Edit, Upload, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Product, ProductInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -16,7 +16,7 @@ const statusBadge = (status: string) => {
   }
 };
 
-const emptyForm: ProductInsert = {
+const emptyForm: ProductInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   name: '',
   category: '',
   quantity: 0,
@@ -25,6 +25,8 @@ const emptyForm: ProductInsert = {
   destination: '',
   trip_id: null,
   status: 'pending',
+  attachment_url: null,
+  attachment_name: null,
 };
 
 export function Products() {
@@ -34,9 +36,10 @@ export function Products() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<ProductInsert>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,9 +60,21 @@ export function Products() {
   });
 
   const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (p: Product) => {
+  const openEdit = (p: any) => {
     const { id, created_at, ...rest } = p;
     setForm(rest); setEditId(id); setModalOpen(true);
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `product_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(fileName, file);
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
+    }
+    setUploading(false);
   };
 
   const save = async () => {
@@ -81,7 +96,7 @@ export function Products() {
     load();
   };
 
-  const update = <K extends keyof ProductInsert>(key: K, value: ProductInsert[K]) => {
+  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -125,12 +140,13 @@ export function Products() {
                 <th>Unit Price</th>
                 <th>Total Value</th>
                 <th>Destination</th>
+                <th>Doc</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
+              {filtered.map((p: any) => (
                 <tr key={p.id}>
                   <td className="font-medium text-slate-800">{p.name}</td>
                   <td>{p.category || '—'}</td>
@@ -140,6 +156,13 @@ export function Products() {
                     {p.unit_price ? `$${((p.quantity || 0) * p.unit_price).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
                   </td>
                   <td>{p.destination || '—'}</td>
+                  <td>
+                    {p.attachment_url ? (
+                      <a href={p.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
+                        <ExternalLink className="h-3.5 w-3.5" /> View
+                      </a>
+                    ) : <span className="text-slate-300">—</span>}
+                  </td>
                   <td>{statusBadge(p.status)}</td>
                   <td>
                     <div className="flex items-center gap-1">
@@ -158,7 +181,7 @@ export function Products() {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Product' : 'Add Product'}>
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Product' : 'Add Product'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="label">Product Name *</label>
@@ -199,6 +222,20 @@ export function Products() {
               <option value="delivered">Delivered</option>
               <option value="cancelled">Cancelled</option>
             </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="label">Upload Document (PDF / Image)</label>
+            <div className="flex items-center gap-2">
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
+              </label>
+              {form.attachment_url && (
+                <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1">
+                  <ExternalLink className="h-4 w-4" /> View
+                </a>
+              )}
+            </div>
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
