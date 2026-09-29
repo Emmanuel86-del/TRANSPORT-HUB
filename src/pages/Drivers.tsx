@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Users, Search, Trash2, Edit, Phone } from 'lucide-react';
+import { Users, Search, Trash2, Edit, Phone, Upload, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Driver, DriverInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -15,7 +15,7 @@ const statusBadge = (status: string) => {
   }
 };
 
-const emptyForm: DriverInsert = {
+const emptyForm: DriverInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   name: '',
   phone: '',
   license_number: '',
@@ -23,6 +23,8 @@ const emptyForm: DriverInsert = {
   status: 'active',
   hire_date: null,
   notes: '',
+  attachment_url: null,
+  attachment_name: null,
 };
 
 export function Drivers() {
@@ -31,9 +33,10 @@ export function Drivers() {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<DriverInsert>(emptyForm);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,7 +47,7 @@ export function Drivers() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = drivers.filter(d =>
+  const filtered = drivers.filter((d: any) =>
     !search ||
     d.name.toLowerCase().includes(search.toLowerCase()) ||
     d.phone?.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,9 +55,21 @@ export function Drivers() {
   );
 
   const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (d: Driver) => {
+  const openEdit = (d: Driver & { attachment_url?: string | null; attachment_name?: string | null }) => {
     const { id, created_at, ...rest } = d;
     setForm(rest); setEditId(id); setModalOpen(true);
+  };
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const fileName = `driver_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('documents').upload(fileName, file);
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
+      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
+    }
+    setUploading(false);
   };
 
   const save = async () => {
@@ -76,7 +91,7 @@ export function Drivers() {
     load();
   };
 
-  const update = <K extends keyof DriverInsert>(key: K, value: DriverInsert[K]) => {
+  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
@@ -95,7 +110,7 @@ export function Drivers() {
         <div className="card"><EmptyState icon={<Users className="h-8 w-8" />} title="No drivers found" message="Add your first driver to start building your directory." /></div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map(d => (
+          {filtered.map((d: any) => (
             <div key={d.id} className="card p-5 transition-shadow hover:shadow-md">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -114,28 +129,26 @@ export function Drivers() {
                 {statusBadge(d.status)}
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-slate-400">License #</p>
-                  <p className="font-medium text-slate-700">{d.license_number || '—'}</p>
-                </div>
+                <div><p className="text-xs text-slate-400">License #</p><p className="font-medium text-slate-700">{d.license_number || '—'}</p></div>
                 <div>
                   <p className="text-xs text-slate-400">License Expiry</p>
                   <p className={`font-medium ${d.license_expiry && new Date(d.license_expiry) < new Date() ? 'text-red-600' : 'text-slate-700'}`}>
                     {d.license_expiry || '—'}
                   </p>
                 </div>
+                <div><p className="text-xs text-slate-400">Hire Date</p><p className="font-medium text-slate-700">{d.hire_date || '—'}</p></div>
                 <div>
-                  <p className="text-xs text-slate-400">Hire Date</p>
-                  <p className="font-medium text-slate-700">{d.hire_date || '—'}</p>
+                  <p className="text-xs text-slate-400">License Doc</p>
+                  {d.attachment_url ? (
+                    <a href={d.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium mt-0.5">
+                      <ExternalLink className="h-3.5 w-3.5" /> View
+                    </a>
+                  ) : <p className="text-slate-400">—</p>}
                 </div>
               </div>
               <div className="mt-4 flex justify-end gap-1">
-                <button onClick={() => openEdit(d)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                  <Edit className="h-4 w-4" />
-                </button>
-                <button onClick={() => setDeleteId(d.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors">
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <button onClick={() => openEdit(d)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"><Edit className="h-4 w-4" /></button>
+                <button onClick={() => setDeleteId(d.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"><Trash2 className="h-4 w-4" /></button>
               </div>
             </div>
           ))}
@@ -144,22 +157,10 @@ export function Drivers() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Driver' : 'Add Driver'}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="label">Name *</label>
-            <input className="input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="Full name" />
-          </div>
-          <div>
-            <label className="label">Phone</label>
-            <input className="input" value={form.phone || ''} onChange={e => update('phone', e.target.value)} placeholder="e.g., +254 700 000 000" />
-          </div>
-          <div>
-            <label className="label">License Number</label>
-            <input className="input" value={form.license_number || ''} onChange={e => update('license_number', e.target.value)} />
-          </div>
-          <div>
-            <label className="label">License Expiry</label>
-            <input type="date" className="input" value={form.license_expiry || ''} onChange={e => update('license_expiry', e.target.value || null)} />
-          </div>
+          <div><label className="label">Name *</label><input className="input" value={form.name} onChange={e => update('name', e.target.value)} placeholder="Full name" /></div>
+          <div><label className="label">Phone</label><input className="input" value={form.phone || ''} onChange={e => update('phone', e.target.value)} placeholder="e.g., +254 700 000 000" /></div>
+          <div><label className="label">License Number</label><input className="input" value={form.license_number || ''} onChange={e => update('license_number', e.target.value)} /></div>
+          <div><label className="label">License Expiry</label><input type="date" className="input" value={form.license_expiry || ''} onChange={e => update('license_expiry', e.target.value || null)} /></div>
           <div>
             <label className="label">Status</label>
             <select className="input" value={form.status} onChange={e => update('status', e.target.value)}>
@@ -168,14 +169,26 @@ export function Drivers() {
               <option value="inactive">Inactive</option>
             </select>
           </div>
-          <div>
-            <label className="label">Hire Date</label>
-            <input type="date" className="input" value={form.hire_date || ''} onChange={e => update('hire_date', e.target.value || null)} />
-          </div>
+          <div><label className="label">Hire Date</label><input type="date" className="input" value={form.hire_date || ''} onChange={e => update('hire_date', e.target.value || null)} /></div>
           <div className="sm:col-span-2">
-            <label className="label">Notes</label>
-            <textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} />
+            <label className="label">Upload Driving License / Certificate</label>
+            <div className="flex items-center gap-2">
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload className="h-4 w-4" />
+                {uploading ? 'Uploading...' : 'Choose File'}
+                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (file) handleUpload(file);
+                }} />
+              </label>
+              {form.attachment_url && (
+                <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                  <ExternalLink className="h-4 w-4" /> {form.attachment_name || 'View document'}
+                </a>
+              )}
+            </div>
           </div>
+          <div className="sm:col-span-2"><label className="label">Notes</label><textarea className="input" rows={2} value={form.notes || ''} onChange={e => update('notes', e.target.value)} /></div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
