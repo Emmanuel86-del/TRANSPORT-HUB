@@ -1,189 +1,199 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Route, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
+import { Route as RouteIcon, Plus, Edit, Filter } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { Trip, TripInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
-import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { LoadingSpinner, EmptyState } from '@/components/Shared';
 
-const emptyForm: TripInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
-  date: new Date().toISOString().slice(0, 10),
-  trip_number: '',
-  lorry_no: '',
-  driver_name: '',
-  route: '',
-  cargo: '',
-  tonnage: null,
-  status: 'planned',
-  notes: '',
-  attachment_url: null,
-  attachment_name: null,
-};
-
-function downloadTemplate() {
-  const headers = ['date', 'trip_number', 'lorry_no', 'driver_name', 'route', 'cargo', 'tonnage', 'status', 'notes'];
-  const sampleRow = ['2026-09-29', 'TR-001', 'KDA 123A', 'John Doe', 'Nairobi - Mombasa', 'General Cargo', '28', 'planned', 'Sample trip'];
-  const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `trips_bulk_template.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+interface Trip {
+  id: string;
+  trip_number: string;
+  vehicle_id: string;
+  vehicle?: { plate_number: string; make_model: string };
+  driver_id: string;
+  driver?: { name: string; phone: string };
+  cargo_type: string;
+  origin: string;
+  destination: string;
+  status: 'planned' | 'in_transit' | 'completed' | 'cancelled';
+  start_date: string;
 }
 
 export function Trips() {
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [bulkUploading, setBulkUploading] = useState(false);
+  const [vehicles, setVehicles] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  
+  // Filter States
+  const [selectedVehicle, setSelectedVehicle] = useState('');
+  const [selectedCargo, setSelectedCargo] = useState('');
 
-  const load = useCallback(async () => {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const emptyForm = {
+    trip_number: `TRP-${Math.floor(1000 + Math.random() * 9000)}`,
+    vehicle_id: '',
+    driver_id: '',
+    cargo_type: '',
+    origin: '',
+    destination: '',
+    status: 'planned' as const,
+    start_date: new Date().toISOString().split('T')[0],
+  };
+
+  const [form, setForm] = useState(emptyForm);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('trips').select('*').order('date', { ascending: false });
-    setTrips(data || []);
+    const [tripRes, vehRes, drvRes] = await Promise.all([
+      supabase.from('trips').select('*, vehicle:vehicles(plate_number, make_model), driver:drivers(name, phone)').order('start_date', { ascending: false }),
+      supabase.from('vehicles').select('id, plate_number, make_model').order('plate_number'),
+      supabase.from('drivers').select('id, name').order('name'),
+    ]);
+    setTrips(tripRes.data || []);
+    setVehicles(vehRes.data || []);
+    setDrivers(drvRes.data || []);
     setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const filtered = trips.filter(t => {
-    const matchSearch = !search ||
-      t.trip_number.toLowerCase().includes(search.toLowerCase()) ||
-      t.lorry_no?.toLowerCase().includes(search.toLowerCase()) ||
-      t.driver_name?.toLowerCase().includes(search.toLowerCase()) ||
-      t.route?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === 'all' || t.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
-
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (t: any) => { const { id, created_at, ...rest } = t; setForm(rest); setEditId(id); setModalOpen(true); };
-
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split('.').pop();
-    const fileName = `trip_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('documents').upload(fileName, file);
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
-    }
-    setUploading(false);
-  };
-
-  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBulkUploading(true);
-    const text = await file.text();
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) { alert('File is empty.'); setBulkUploading(false); return; }
-
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    const rows = lines.slice(1).map(line => {
-      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
-      const obj: any = {};
-      headers.forEach((h, i) => { obj[h] = values[i] || null; });
-      return {
-        date: obj.date || new Date().toISOString().slice(0, 10),
-        trip_number: obj.trip_number || 'TR-000',
-        lorry_no: obj.lorry_no || '',
-        driver_name: obj.driver_name || '',
-        route: obj.route || '',
-        cargo: obj.cargo || '',
-        tonnage: obj.tonnage ? Number(obj.tonnage) : null,
-        status: obj.status || 'planned',
-        notes: obj.notes || '',
-      };
-    });
-
-    const { error } = await supabase.from('trips').insert(rows);
-    setBulkUploading(false);
-    if (error) alert('Error: ' + error.message);
-    else { setBulkModalOpen(false); load(); }
-  };
-
-  const save = async () => {
+  const saveTrip = async () => {
     setSaving(true);
-    if (editId) await supabase.from('trips').update(form).eq('id', editId);
-    else await supabase.from('trips').insert(form);
-    setSaving(false); setModalOpen(false); load();
+    if (editId) {
+      await supabase.from('trips').update(form).eq('id', editId);
+    } else {
+      await supabase.from('trips').insert(form);
+    }
+    setSaving(false);
+    setModalOpen(false);
+    loadData();
   };
 
-  const confirmDelete = async () => {
-    if (!deleteId) return;
-    await supabase.from('trips').delete().eq('id', deleteId);
-    setDeleteId(null); load();
-  };
+  // Unique list of cargo types for the filter dropdown
+  const uniqueCargoTypes = Array.from(new Set(trips.map(t => t.cargo_type).filter(Boolean)));
 
-  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-  };
+  // Filtered trips logic
+  const filteredTrips = trips.filter(t => {
+    const matchesVehicle = selectedVehicle ? t.vehicle_id === selectedVehicle : true;
+    const matchesCargo = selectedCargo ? t.cargo_type === selectedCargo : true;
+    return matchesVehicle && matchesCargo;
+  });
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Trips Management" subtitle="Manage dispatch logs, routes, and transit status" icon={<Route className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Trip" />
+      <PageHeader 
+        title="Trips & Dispatches" 
+        subtitle="Manage active and historical vehicle trips, routes, and cargo allocations" 
+        icon={<RouteIcon className="h-6 w-6" />} 
+        onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
+        addLabel="Create New Trip" 
+      />
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input className="input pl-9" placeholder="Search trips..." value={search} onChange={e => setSearch(e.target.value)} />
+      {/* Filter Controls Bar */}
+      <div className="card flex flex-col sm:flex-row items-center justify-between gap-4 py-3 px-4">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Filter className="h-4 w-4 text-slate-500" />
+          <span className="text-sm font-semibold text-slate-700">Filters:</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setBulkModalOpen(true)} className="btn btn-secondary">
-            <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Bulk Excel Upload
-          </button>
-          <select className="input w-auto" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="all">All Status</option>
-            <option value="planned">Planned</option>
-            <option value="in_transit">In Transit</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          {/* Vehicle Filter */}
+          <select 
+            className="input text-sm py-1.5 w-full sm:w-48" 
+            value={selectedVehicle} 
+            onChange={e => setSelectedVehicle(e.target.value)}
+          >
+            <option value="">All Vehicles</option>
+            {vehicles.map(v => (
+              <option key={v.id} value={v.id}>{v.plate_number} ({v.make_model})</option>
+            ))}
           </select>
+
+          {/* Cargo Type Filter */}
+          <select 
+            className="input text-sm py-1.5 w-full sm:w-48" 
+            value={selectedCargo} 
+            onChange={e => setSelectedCargo(e.target.value)}
+          >
+            <option value="">All Cargo Types</option>
+            {uniqueCargoTypes.map(cargo => (
+              <option key={cargo} value={cargo}>{cargo}</option>
+            ))}
+          </select>
+
+          {(selectedVehicle || selectedCargo) && (
+            <button 
+              onClick={() => { setSelectedVehicle(''); setSelectedCargo(''); }}
+              className="text-xs text-blue-600 hover:underline font-medium whitespace-nowrap"
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
       </div>
 
-      {loading ? <LoadingSpinner message="Loading trips..." /> : filtered.length === 0 ? (
-        <div className="card"><EmptyState icon={<Route className="h-8 w-8" />} title="No trips found" message="Add transit trips to begin tracking logistics." /></div>
+      {loading ? (
+        <LoadingSpinner message="Loading trips..." />
+      ) : filteredTrips.length === 0 ? (
+        <div className="card">
+          <EmptyState 
+            icon={<RouteIcon className="h-8 w-8" />} 
+            title="No matching trips found" 
+            message="Try adjusting your vehicle or cargo type filters, or add a new trip." 
+          />
+        </div>
       ) : (
         <div className="card table-wrapper">
           <table className="data-table">
             <thead>
-              <tr><th>Date</th><th>Trip No.</th><th>Lorry</th><th>Driver</th><th>Route</th><th>Cargo</th><th>Tonnage</th><th>Doc</th><th>Status</th><th></th></tr>
+              <tr>
+                <th>Trip Number</th>
+                <th>Vehicle Plate</th>
+                <th>Driver</th>
+                <th>Cargo Type</th>
+                <th>Route (Origin → Destination)</th>
+                <th>Status</th>
+                <th>Start Date</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
-              {filtered.map((t: any) => (
+              {filteredTrips.map(t => (
                 <tr key={t.id}>
-                  <td className="font-medium text-slate-800">{t.date}</td>
-                  <td className="font-mono text-xs">{t.trip_number}</td>
-                  <td>{t.lorry_no || '—'}</td>
-                  <td>{t.driver_name || '—'}</td>
-                  <td>{t.route || '—'}</td>
-                  <td>{t.cargo || '—'}</td>
-                  <td>{t.tonnage ?? '—'}</td>
+                  <td className="font-bold text-slate-800">{t.trip_number}</td>
+                  <td>{t.vehicle?.plate_number || '—'} <span className="block text-xs text-slate-400">{t.vehicle?.make_model}</span></td>
+                  <td>{t.driver?.name || '—'}</td>
                   <td>
-                    {t.attachment_url ? (
-                      <a href={t.attachment_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
-                        <ExternalLink className="h-3.5 w-3.5" /> View
-                      </a>
-                    ) : <span className="text-slate-300">—</span>}
+                    <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700">
+                      {t.cargo_type || 'General'}
+                    </span>
                   </td>
-                  <td><span className={`badge-${t.status === 'completed' ? 'success' : t.status === 'in_transit' ? 'warning' : 'neutral'}`}>{t.status}</span></td>
+                  <td>{t.origin} → {t.destination}</td>
                   <td>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(t)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => setDeleteId(t.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold uppercase ${
+                      t.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                      t.status === 'in_transit' ? 'bg-blue-100 text-blue-700' :
+                      t.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {t.status.replace('_', ' ')}
+                    </span>
+                  </td>
+                  <td>{t.start_date}</td>
+                  <td>
+                    <button 
+                      onClick={() => {
+                        const { id, vehicle, driver, ...rest } = t as any;
+                        setForm(rest);
+                        setEditId(id);
+                        setModalOpen(true);
+                      }} 
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -192,56 +202,66 @@ export function Trips() {
         </div>
       )}
 
-      {/* Bulk Upload Modal */}
-      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Trips via Excel/CSV" size="md">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">Download the required template, fill in your trip details, and upload the completed CSV file below.</p>
-          <button onClick={downloadTemplate} className="btn btn-secondary w-full flex items-center justify-center gap-2">
-            <Download className="h-4 w-4 text-blue-600" /> Download Trips Template
-          </button>
-          <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500">
-            <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-2" />
-            <span className="text-sm font-medium text-slate-700">{bulkUploading ? 'Importing...' : 'Click to select filled CSV file'}</span>
-            <input type="file" accept=".csv" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
-          </label>
-        </div>
-        <div className="mt-5 flex justify-end"><button onClick={() => setBulkModalOpen(false)} className="btn-secondary">Close</button></div>
-      </Modal>
-
       {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Trip' : 'Add Trip'} size="lg">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Trip' : 'Create New Trip'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div><label className="label">Date *</label><input type="date" className="input" value={form.date} onChange={e => update('date', e.target.value)} /></div>
-          <div><label className="label">Trip Number *</label><input className="input" value={form.trip_number} onChange={e => update('trip_number', e.target.value)} /></div>
-          <div><label className="label">Lorry No.</label><input className="input" value={form.lorry_no || ''} onChange={e => update('lorry_no', e.target.value)} /></div>
-          <div><label className="label">Driver Name</label><input className="input" value={form.driver_name || ''} onChange={e => update('driver_name', e.target.value)} /></div>
-          <div><label className="label">Route</label><input className="input" value={form.route || ''} onChange={e => update('route', e.target.value)} /></div>
-          <div><label className="label">Cargo</label><input className="input" value={form.cargo || ''} onChange={e => update('cargo', e.target.value)} /></div>
-          <div><label className="label">Tonnage</label><input type="number" className="input" value={form.tonnage ?? ''} onChange={e => update('tonnage', e.target.value ? Number(e.target.value) : null)} /></div>
           <div>
-            <label className="label">Status</label>
-            <select className="input" value={form.status} onChange={e => update('status', e.target.value as any)}>
-              <option value="planned">Planned</option><option value="in_transit">In Transit</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
+            <label className="label">Trip Number *</label>
+            <input type="text" className="input" value={form.trip_number} onChange={e => setForm({ ...form, trip_number: e.target.value })} />
+          </div>
+
+          <div>
+            <label className="label">Cargo Type *</label>
+            <input type="text" className="input" value={form.cargo_type} onChange={e => setForm({ ...form, cargo_type: e.target.value })} placeholder="e.g. Bulk Cement, Fuel, Container" />
+          </div>
+
+          <div>
+            <label className="label">Vehicle *</label>
+            <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
+              <option value="">Select Vehicle Plate</option>
+              {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} ({v.make_model})</option>)}
             </select>
           </div>
-          <div className="sm:col-span-2">
-            <label className="label">Upload Document</label>
-            <div className="flex items-center gap-2">
-              <label className="btn btn-secondary cursor-pointer">
-                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-              </label>
-              {form.attachment_url && <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1"><ExternalLink className="h-4 w-4" /> View</a>}
-            </div>
+
+          <div>
+            <label className="label">Driver *</label>
+            <select className="input" value={form.driver_id} onChange={e => setForm({ ...form, driver_id: e.target.value })}>
+              <option value="">Select Driver</option>
+              {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Origin *</label>
+            <input type="text" className="input" value={form.origin} onChange={e => setForm({ ...form, origin: e.target.value })} placeholder="e.g. Mombasa Port" />
+          </div>
+
+          <div>
+            <label className="label">Destination *</label>
+            <input type="text" className="input" value={form.destination} onChange={e => setForm({ ...form, destination: e.target.value })} placeholder="e.g. Nairobi Depot" />
+          </div>
+
+          <div>
+            <label className="label">Status</label>
+            <select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+              <option value="planned">Planned</option>
+              <option value="in_transit">In Transit</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="label">Start Date</label>
+            <input type="date" className="input" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
           </div>
         </div>
+
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
-          <button onClick={save} disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
+          <button onClick={saveTrip} disabled={saving || !form.trip_number} className="btn-primary">{saving ? 'Saving...' : 'Save Trip'}</button>
         </div>
       </Modal>
-
-      <ConfirmDialog open={!!deleteId} title="Delete Trip" message="Are you sure?" onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
     </div>
   );
 }
