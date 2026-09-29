@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Package, Search, Trash2, Edit, Upload, ExternalLink } from 'lucide-react';
+import { Package, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Product, ProductInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -29,17 +29,32 @@ const emptyForm: ProductInsert & { attachment_url?: string | null; attachment_na
   attachment_name: null,
 };
 
+function downloadTemplate() {
+  const headers = ['name', 'category', 'quantity', 'unit', 'unit_price', 'destination', 'status'];
+  const sampleRow = ['Cement Bags', 'Construction', '50', 'bags', '750', 'Mombasa', 'pending'];
+  const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `products_bulk_template.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function Products() {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +92,36 @@ export function Products() {
     setUploading(false);
   };
 
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkUploading(true);
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) { alert('File is empty.'); setBulkUploading(false); return; }
+
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    const rows = lines.slice(1).map(line => {
+      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
+      const obj: any = {};
+      headers.forEach((h, i) => { obj[h] = values[i] || null; });
+      return {
+        name: obj.name || 'Sample Product',
+        category: obj.category || '',
+        quantity: obj.quantity ? Number(obj.quantity) : 0,
+        unit: obj.unit || 'units',
+        unit_price: obj.unit_price ? Number(obj.unit_price) : null,
+        destination: obj.destination || '',
+        status: obj.status || 'pending',
+      };
+    });
+
+    const { error } = await supabase.from('products').insert(rows);
+    setBulkUploading(false);
+    if (error) alert('Error: ' + error.message);
+    else { setBulkModalOpen(false); load(); }
+  };
+
   const save = async () => {
     setSaving(true);
     if (editId) {
@@ -106,12 +151,12 @@ export function Products() {
     <div className="space-y-5 animate-fade-in">
       <PageHeader title="Products" subtitle="Track goods and cargo being transported" icon={<Package className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Product" />
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input className="input pl-9" placeholder="Search products..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select className="input w-auto" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
@@ -119,10 +164,14 @@ export function Products() {
             <option value="delivered">Delivered</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
-            Total Value: <span className="text-emerald-600">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-          </span>
+          <button onClick={() => setBulkModalOpen(true)} className="btn btn-secondary">
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Bulk Excel Upload
+          </button>
         </div>
+      </div>
+
+      <div className="text-sm font-medium text-slate-600">
+        Total Value: <span className="text-emerald-600">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
       </div>
 
       {loading ? (
@@ -181,6 +230,23 @@ export function Products() {
         </div>
       )}
 
+      {/* Bulk Upload Modal */}
+      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Products via Excel/CSV" size="md">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">Download the required template, fill in your product records, and upload the completed CSV file.</p>
+          <button onClick={downloadTemplate} className="btn btn-secondary w-full flex items-center justify-center gap-2">
+            <Download className="h-4 w-4 text-blue-600" /> Download Products Template
+          </button>
+          <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500">
+            <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-2" />
+            <span className="text-sm font-medium text-slate-700">{bulkUploading ? 'Importing...' : 'Click to select filled CSV file'}</span>
+            <input type="file" accept=".csv" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
+          </label>
+        </div>
+        <div className="mt-5 flex justify-end"><button onClick={() => setBulkModalOpen(false)} className="btn-secondary">Close</button></div>
+      </Modal>
+
+      {/* Add/Edit Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Product' : 'Add Product'} size="lg">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
