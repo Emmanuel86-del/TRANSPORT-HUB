@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Wrench, AlertTriangle, Bell, Edit, Plus, Package } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Wrench, AlertTriangle, Bell, Edit, Plus, Package, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
@@ -24,7 +24,9 @@ export function SpareParts() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'tyres' | 'batteries' | 'general'>('all');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const emptyForm = {
     name: '',
@@ -71,17 +73,90 @@ export function SpareParts() {
     loadData();
   };
 
+  // Smart Spare Parts Usage & Auto-Deduction Upload Handler
+  const handleSparePartsUsageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    
+    if (lines.length < 2) {
+      alert('File is empty.');
+      setUploading(false);
+      return;
+    }
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+    let successCount = 0;
+
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const row: any = {};
+      headers.forEach((h, idx) => row[h] = values[idx]);
+
+      const partName = row['part_name'] || row['name'];
+      const qtyUsed = Number(row['quantity_used'] || row['qty'] || 0);
+
+      if (!partName || qtyUsed <= 0) continue;
+
+      // 1. Find the matching part in your spare_parts table
+      const { data: existingPart } = await supabase
+        .from('spare_parts')
+        .select('id')
+        .ilike('name', `%${partName}%`)
+        .single();
+
+      if (existingPart) {
+        // 2. Insert the work record (Database trigger automatically handles deduction)
+        const { error } = await supabase.from('work_records').insert({
+          part_id: existingPart.id,
+          quantity_used: qtyUsed,
+          notes: `Auto-deducted via bulk usage upload`
+        });
+
+        if (!error) {
+          successCount++;
+        }
+      }
+    }
+
+    setUploading(false);
+    alert(`Successfully processed ${successCount} spare part usage record(s)! Inventory automatically updated.`);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    loadData();
+  };
+
   const filteredParts = activeTab === 'all' ? parts : parts.filter(p => p.category === activeTab);
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader 
-        title="Spare Parts & Inventory Notifier" 
-        subtitle="Manage Tyres, Batteries, and General Spares with Automated Stock Threshold Alerts" 
-        icon={<Wrench className="h-6 w-6" />} 
-        onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
-        addLabel="Add Spare Part" 
-      />
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <PageHeader 
+          title="Spare Parts & Inventory Notifier" 
+          subtitle="Manage Tyres, Batteries, and General Spares with Automated Stock Threshold Alerts" 
+          icon={<Wrench className="h-6 w-6" />} 
+          onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
+          addLabel="Add Spare Part" 
+        />
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={uploading} 
+            className="btn-primary flex items-center gap-1.5 text-xs"
+          >
+            <Upload className="h-4 w-4" /> {uploading ? 'Processing Usage...' : 'Upload Parts Usage CSV'}
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleSparePartsUsageUpload} 
+            accept=".csv" 
+            className="hidden" 
+          />
+        </div>
+      </div>
 
       {/* Stock Notifier Alert Banner */}
       {lowStockItems.length > 0 && (
