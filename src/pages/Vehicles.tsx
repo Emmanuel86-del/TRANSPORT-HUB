@@ -146,6 +146,9 @@ export function Vehicles() {
     <div className="space-y-5 animate-fade-in">
       <PageHeader title="Vehicle Management" subtitle="Vehicle inventory, insurance, and inspection tracking" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" />
 
+      {/* Universal Auto-Routing Data Importer Component */}
+      <UniversalUploadModal />
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
