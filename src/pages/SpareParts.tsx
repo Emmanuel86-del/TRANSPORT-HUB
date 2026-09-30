@@ -44,7 +44,6 @@ export function SpareParts() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    // Explicitly query columns to prevent 400 errors if any optional column is missing in DB
     const { data, error } = await supabase
       .from('spare_parts')
       .select('id, name, category, quantity, unit_price, vehicle_plate, serial_number, manufacturer, installation_date, guarantee_months')
@@ -75,10 +74,18 @@ export function SpareParts() {
     setSaving(true);
     if (editId) {
       const { error } = await supabase.from('spare_parts').update(form).eq('id', editId);
-      if (error) alert(`Error updating: ${error.message}`);
+      if (error) {
+        alert(`Error updating part: ${error.message}`);
+        setSaving(false);
+        return;
+      }
     } else {
       const { error } = await supabase.from('spare_parts').insert(form);
-      if (error) alert(`Error inserting: ${error.message}`);
+      if (error) {
+        alert(`Error adding part: ${error.message}`);
+        setSaving(false);
+        return;
+      }
     }
     setSaving(false);
     setModalOpen(false);
@@ -347,7 +354,7 @@ export function SpareParts() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="label">Part Name *</label>
-            <input type="text" className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Bridgestone Tyre / Amarron Battery" />
+            <input type="text" className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. tyre / battery / grill" />
           </div>
 
           <div>
