@@ -34,9 +34,9 @@ export function UniversalUploadModal({ isOpen, onClose, onSuccess }: UniversalUp
       const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
       setLog(prev => [...prev, `Detected headers: ${headers.join(', ')}`]);
 
-      // AUTO-ROUTING LOGIC
-      if (headers.some(h => h.includes('part') || h.includes('item') || h.includes('tyre') || h.includes('battery'))) {
-        setLog(prev => [...prev, 'Routing data to -> Spare Parts Inventory...']);
+      // --- 1. SPARE PARTS & INVENTORY ROUTING ---
+      if (headers.some(h => h.includes('part') || h.includes('item') || h.includes('tyre') || h.includes('battery') || h.includes('spare'))) {
+        setLog(prev => [...prev, 'Auto-routed to -> Spare Parts Inventory...']);
         
         let count = 0;
         const { data: allParts } = await supabase.from('spare_parts').select('id, name, quantity');
@@ -46,33 +46,98 @@ export function UniversalUploadModal({ isOpen, onClose, onSuccess }: UniversalUp
           const row: any = {};
           headers.forEach((h, idx) => row[h] = values[idx]);
 
-          const partName = row['part_name'] || row['name'] || row['item'] || '';
-          const qtyUsed = Number(row['quantity_used'] || row['qty'] || row['quantity'] || 0);
+          const rawPartName = row['part_name'] || row['name'] || row['item'] || row['spare_part'] || row['part'] || '';
+          const partName = rawPartName.trim();
+          const qtyUsed = Number(row['quantity_used'] || row['qty'] || row['quantity'] || row['used'] || 0);
 
           if (!partName) continue;
 
-          const existingPart = allParts?.find(p => p.name.toLowerCase().includes(partName.toLowerCase()));
-          if (existingPart && qtyUsed > 0) {
+          const normalizedSearch = partName.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
+          const existingPart = allParts?.find(p => {
+            const dbName = p.name.trim().toLowerCase();
+            const dbNormalized = dbName.replace(/ies$/, 'y').replace(/s$/, '');
+            return dbName === partName.toLowerCase() || 
+                   dbNormalized.includes(normalizedSearch) || 
+                   normalizedSearch.includes(dbNormalized);
+          });
+
+          if (existingPart) {
             const newQty = Math.max(0, existingPart.quantity - qtyUsed);
-            await supabase.from('spare_parts').update({ quantity: newQty }).eq('id', existingPart.id);
-            count++;
+            const { error } = await supabase.from('spare_parts').update({ quantity: newQty }).eq('id', existingPart.id);
+            if (!error) {
+              count++;
+              existingPart.quantity = newQty;
+              setLog(prev => [...prev, `[Spare Parts] "${partName}" updated -> Qty: ${newQty}`]);
+            }
           }
         }
-        setLog(prev => [...prev, `Successfully updated ${count} spare parts inventory records!`]);
+        setLog(prev => [...prev, `Successfully processed ${count} spare parts record(s)!`]);
 
-      } else if (headers.some(h => h.includes('trip') || h.includes('route') || h.includes('destination'))) {
-        setLog(prev => [...prev, 'Routing data to -> Fleet Trips & Dispatch...']);
-        setLog(prev => [...prev, 'Trips successfully imported!']);
+      } 
+      // --- 2. TRIPS & DISPATCH ROUTING ---
+      else if (headers.some(h => h.includes('trip') || h.includes('route') || h.includes('destination') || h.includes('dispatch'))) {
+        setLog(prev => [...prev, 'Auto-routed to -> Trips & Dispatch...']);
+        
+        let count = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          const row: any = {};
+          headers.forEach((h, idx) => row[h] = values[idx]);
 
-      } else if (headers.some(h => h.includes('driver') || h.includes('license'))) {
-        setLog(prev => [...prev, 'Routing data to -> Drivers & Compliance...']);
-        setLog(prev => [...prev, 'Driver records successfully imported!']);
+          const destination = row['destination'] || row['route'] || row['trip'] || '';
+          const vehiclePlate = row['vehicle_plate'] || row['plate'] || '';
+
+          if (!destination) continue;
+
+          const { error } = await supabase.from('trips').insert({
+            destination,
+            vehicle_plate: vehiclePlate || null,
+            status: 'pending'
+          });
+
+          if (!error) {
+            count++;
+            setLog(prev => [...prev, `[Trips] Imported route to ${destination}`]);
+          }
+        }
+        setLog(prev => [...prev, `Successfully imported ${count} trip(s)!`]);
+
+      } 
+      // --- 3. DRIVERS ROUTING ---
+      else if (headers.some(h => h.includes('driver') || h.includes('license') || h.includes('badge'))) {
+        setLog(prev => [...prev, 'Auto-routed to -> Drivers Management...']);
+        
+        let count = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          const row: any = {};
+          headers.forEach((h, idx) => row[h] = values[idx]);
+
+          const driverName = row['driver_name'] || row['name'] || row['driver'] || '';
+          const phone = row['phone'] || row['contact'] || '';
+
+          if (!driverName) continue;
+
+          const { error } = await supabase.from('drivers').insert({
+            name: driverName,
+            phone: phone || null
+          });
+
+          if (!error) {
+            count++;
+            setLog(prev => [...prev, `[Drivers] Added driver ${driverName}`]);
+          }
+        }
+        setLog(prev => [...prev, `Successfully imported ${count} driver record(s)!`]);
 
       } else {
-        setLog(prev => [...prev, 'Unrecognized file format. Ensure headers match known entities.']);
+        setLog(prev => [...prev, 'Unrecognized file headers. Ensure CSV matches spare parts, trips, or drivers.']);
       }
 
-      onSuccess();
+      setTimeout(() => {
+        onSuccess();
+      }, 2000);
+
     } catch (err: any) {
       setLog(prev => [...prev, `Error processing file: ${err.message}`]);
     } finally {
@@ -93,7 +158,7 @@ export function UniversalUploadModal({ isOpen, onClose, onSuccess }: UniversalUp
         </div>
 
         <p className="text-sm text-slate-600">
-          Upload any CSV or document. The system will automatically analyze its columns and route the information to the correct database table and page.
+          Upload any file or CSV. The system will automatically detect the data type based on its columns and route it to the correct page and database table.
         </p>
 
         <div 
@@ -102,7 +167,7 @@ export function UniversalUploadModal({ isOpen, onClose, onSuccess }: UniversalUp
         >
           <FileSpreadsheet className="h-10 w-10 text-blue-500 mx-auto mb-2" />
           <p className="text-sm font-semibold text-slate-700">Click to upload document or CSV</p>
-          <p className="text-xs text-slate-400 mt-1">Supports CSV, text logs, or spreadsheets</p>
+          <p className="text-xs text-slate-400 mt-1">Auto-routes to Spare Parts, Trips, or Drivers</p>
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -115,7 +180,7 @@ export function UniversalUploadModal({ isOpen, onClose, onSuccess }: UniversalUp
         {log.length > 0 && (
           <div className="bg-slate-900 text-slate-200 rounded-xl p-3 text-xs font-mono space-y-1 max-h-40 overflow-y-auto">
             {log.map((entry, idx) => (
-              <div key={idx} className="flex items-center gap-1.5">
+              <div key={idx}>
                 <span>{entry}</span>
               </div>
             ))}
