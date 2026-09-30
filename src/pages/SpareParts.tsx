@@ -44,8 +44,18 @@ export function SpareParts() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('spare_parts').select('*').order('name');
-    setParts(data || []);
+    // Explicitly query columns to prevent 400 errors if any optional column is missing in DB
+    const { data, error } = await supabase
+      .from('spare_parts')
+      .select('id, name, category, quantity, unit_price, vehicle_plate, serial_number, manufacturer, installation_date, guarantee_months')
+      .order('name');
+      
+    if (error) {
+      console.error('Supabase query error:', error.message);
+      alert(`Database Error: ${error.message}`);
+    } else {
+      setParts(data || []);
+    }
     setLoading(false);
   }, []);
 
@@ -64,9 +74,11 @@ export function SpareParts() {
   const savePart = async () => {
     setSaving(true);
     if (editId) {
-      await supabase.from('spare_parts').update(form).eq('id', editId);
+      const { error } = await supabase.from('spare_parts').update(form).eq('id', editId);
+      if (error) alert(`Error updating: ${error.message}`);
     } else {
-      await supabase.from('spare_parts').insert(form);
+      const { error } = await supabase.from('spare_parts').insert(form);
+      if (error) alert(`Error inserting: ${error.message}`);
     }
     setSaving(false);
     setModalOpen(false);
@@ -147,7 +159,7 @@ export function SpareParts() {
       });
 
       if (existingPart) {
-        // 2. Insert work record (Database trigger automatically handles deduction)
+        // Insert work record (Database trigger automatically handles deduction)
         const { error } = await supabase.from('work_records').insert({
           part_id: existingPart.id,
           quantity_used: qtyUsed,
