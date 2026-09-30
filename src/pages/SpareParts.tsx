@@ -90,7 +90,7 @@ export function SpareParts() {
   // Download CSV Template for Used Spare Parts (Usage Log)
   const downloadUsageTemplate = () => {
     const headers = ['part_name', 'quantity_used'];
-    const sampleRow = ['Bridgestone Tyre', '2'];
+    const sampleRow = ['battery', '1'];
     const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -101,7 +101,7 @@ export function SpareParts() {
     URL.revokeObjectURL(url);
   };
 
-  // Smart Spare Parts Usage & Auto-Deduction Upload Handler
+  // Robust Smart Spare Parts Usage & Auto-Deduction Upload Handler
   const handleSparePartsUsageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -118,26 +118,28 @@ export function SpareParts() {
 
     const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
     let successCount = 0;
+    let failedItems: string[] = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
       const row: any = {};
       headers.forEach((h, idx) => row[h] = values[idx]);
 
-      const partName = row['part_name'] || row['name'];
-      const qtyUsed = Number(row['quantity_used'] || row['qty'] || 0);
+      const rawPartName = row['part_name'] || row['name'] || row['item'] || row['spare_part'] || row['part'] || '';
+      const partName = rawPartName.trim();
+      const qtyUsed = Number(row['quantity_used'] || row['qty'] || row['quantity'] || row['used'] || 0);
 
       if (!partName || qtyUsed <= 0) continue;
 
-      // 1. Find the matching part in your spare_parts table
-      const { data: existingPart } = await supabase
+      // 1. Find matching part case-insensitively with trimming
+      const { data: existingPart, error: fetchError } = await supabase
         .from('spare_parts')
-        .select('id')
-        .ilike('name', `%${partName}%`)
-        .single();
+        .select('id, name')
+        .ilike('name', partName)
+        .maybeSingle();
 
-      if (existingPart) {
-        // 2. Insert the work record (Database trigger automatically handles deduction)
+      if (existingPart && !fetchError) {
+        // 2. Insert work record (Database trigger automatically handles deduction)
         const { error } = await supabase.from('work_records').insert({
           part_id: existingPart.id,
           quantity_used: qtyUsed,
@@ -146,12 +148,22 @@ export function SpareParts() {
 
         if (!error) {
           successCount++;
+        } else {
+          failedItems.push(`${partName} (Insert error)`);
         }
+      } else {
+        failedItems.push(`${partName} (Not found in inventory)`);
       }
     }
 
     setUploading(false);
-    alert(`Successfully processed ${successCount} spare part usage record(s)! Inventory automatically updated.`);
+    
+    let message = `Successfully processed ${successCount} spare part usage record(s)! Inventory automatically updated.`;
+    if (failedItems.length > 0) {
+      message += `\n\nFailed items:\n- ${failedItems.join('\n- ')}`;
+    }
+    alert(message);
+
     if (fileInputRef.current) fileInputRef.current.value = '';
     loadData();
   };
