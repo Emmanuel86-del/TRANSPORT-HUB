@@ -26,7 +26,7 @@ function downloadTemplate() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `fleet_bulk_template.csv`;
+  link.download = `vehicles_bulk_template.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -46,7 +46,8 @@ export function Vehicles() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('fleets').select('*').order('lorry_no', { ascending: true });
+    // Updated table name from 'fleets' to 'vehicles'
+    const { data } = await supabase.from('vehicles').select('*').order('lorry_no', { ascending: true });
     setFleets(data || []);
     setLoading(false);
   }, []);
@@ -63,7 +64,7 @@ export function Vehicles() {
   const handleUpload = async (file: File) => {
     setUploading(true);
     const ext = file.name.split('.').pop();
-    const fileName = `fleet_${Date.now()}.${ext}`;
+    const fileName = `vehicle_${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('documents').upload(fileName, file);
     if (!error) {
       const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
@@ -96,7 +97,8 @@ export function Vehicles() {
       };
     });
 
-    const { error } = await supabase.from('fleets').insert(rows);
+    // Updated table name from 'fleets' to 'vehicles'
+    const { error } = await supabase.from('vehicles').insert(rows);
     setBulkUploading(false);
     if (error) alert('Error: ' + error.message);
     else { setBulkModalOpen(false); load(); }
@@ -104,14 +106,16 @@ export function Vehicles() {
 
   const save = async () => {
     setSaving(true);
-    if (editId) await supabase.from('fleets').update(form).eq('id', editId);
-    else await supabase.from('fleets').insert(form);
+    // Updated table name from 'fleets' to 'vehicles'
+    if (editId) await supabase.from('vehicles').update(form).eq('id', editId);
+    else await supabase.from('vehicles').insert(form);
     setSaving(false); setModalOpen(false); load();
   };
 
   const confirmDelete = async () => {
     if (!deleteId) return;
-    await supabase.from('fleets').delete().eq('id', deleteId);
+    // Updated table name from 'fleets' to 'vehicles'
+    await supabase.from('vehicles').delete().eq('id', deleteId);
     setDeleteId(null); load();
   };
 
