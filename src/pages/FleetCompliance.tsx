@@ -8,7 +8,7 @@ import { LoadingSpinner, EmptyState } from '@/components/Shared';
 interface ComplianceRecord {
   id: string;
   vehicle_id: string;
-  vehicle?: { plate_number: string; make_model: string };
+  vehicle?: { plate_number: string; make?: string; model?: string };
   insurance_start: string;
   insurance_expiry: string;
   comesa_start: string;
@@ -78,8 +78,8 @@ export function FleetCompliance() {
   const loadData = useCallback(async () => {
     setLoading(true);
     const [compRes, vehRes] = await Promise.all([
-      supabase.from('vehicle_compliance').select('*, vehicle:vehicles(plate_number, make_model)').order('created_at', { ascending: false }),
-      supabase.from('vehicles').select('id, plate_number, make_model').order('plate_number'),
+      supabase.from('vehicle_compliance').select('*, vehicle:vehicles(plate_number, make, model)').order('created_at', { ascending: false }),
+      supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
     ]);
     setRecords(compRes.data || []);
     setVehicles(vehRes.data || []);
@@ -234,7 +234,7 @@ export function FleetCompliance() {
               {records.map(r => (
                 <tr key={r.id}>
                   <td className="font-semibold text-slate-800">
-                    {r.vehicle?.plate_number || 'Unknown'} <span className="block text-xs font-normal text-slate-500">{r.vehicle?.make_model}</span>
+                    {r.vehicle?.plate_number || 'Unknown'} <span className="block text-xs font-normal text-slate-500">{r.vehicle?.make} {r.vehicle?.model}</span>
                   </td>
                   <td>
                     <div className="text-xs">Start: {r.insurance_start || '—'}</div>
@@ -283,7 +283,7 @@ export function FleetCompliance() {
             <label className="label">Select Vehicle *</label>
             <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
               <option value="">Choose vehicle plate number</option>
-              {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} ({v.make_model})</option>)}
+              {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} ({v.make} {v.model})</option>)}
             </select>
           </div>
 
@@ -309,7 +309,7 @@ export function FleetCompliance() {
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
+          <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel/Close</button>
           <button onClick={saveRecord} disabled={saving || !form.vehicle_id} className="btn-primary">{saving ? 'Saving...' : 'Save Compliance'}</button>
         </div>
       </Modal>
