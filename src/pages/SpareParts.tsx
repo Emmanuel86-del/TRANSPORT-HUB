@@ -101,7 +101,7 @@ export function SpareParts() {
     URL.revokeObjectURL(url);
   };
 
-  // Robust Smart Spare Parts Usage & Auto-Deduction Upload Handler
+  // Robust Case-Insensitive Smart Spare Parts Usage Upload Handler
   const handleSparePartsUsageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -120,6 +120,9 @@ export function SpareParts() {
     let successCount = 0;
     let failedItems: string[] = [];
 
+    // Fetch all current parts from database for memory lookup
+    const { data: allParts } = await supabase.from('spare_parts').select('id, name');
+
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
       const row: any = {};
@@ -131,15 +134,11 @@ export function SpareParts() {
 
       if (!partName || qtyUsed <= 0) continue;
 
-      // 1. Find matching part case-insensitively with trimming
-      const { data: existingPart, error: fetchError } = await supabase
-        .from('spare_parts')
-        .select('id, name')
-        .ilike('name', partName)
-        .maybeSingle();
+      // Case-insensitive exact match in memory
+      const existingPart = allParts?.find(p => p.name.trim().toLowerCase() === partName.toLowerCase());
 
-      if (existingPart && !fetchError) {
-        // 2. Insert work record (Database trigger automatically handles deduction)
+      if (existingPart) {
+        // Insert work record (Database trigger automatically handles deduction)
         const { error } = await supabase.from('work_records').insert({
           part_id: existingPart.id,
           quantity_used: qtyUsed,
