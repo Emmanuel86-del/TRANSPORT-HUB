@@ -72,21 +72,32 @@ export function SpareParts() {
 
   const savePart = async () => {
     setSaving(true);
+
+    // Sanitize payload: convert empty string fields to null for PostgreSQL compatibility
+    const payload = {
+      ...form,
+      installation_date: form.installation_date || null,
+      vehicle_plate: form.vehicle_plate || null,
+      serial_number: form.serial_number || null,
+      manufacturer: form.manufacturer || null,
+    };
+
     if (editId) {
-      const { error } = await supabase.from('spare_parts').update(form).eq('id', editId);
+      const { error } = await supabase.from('spare_parts').update(payload).eq('id', editId);
       if (error) {
         alert(`Error updating part: ${error.message}`);
         setSaving(false);
         return;
       }
     } else {
-      const { error } = await supabase.from('spare_parts').insert(form);
+      const { error } = await supabase.from('spare_parts').insert(payload);
       if (error) {
         alert(`Error adding part: ${error.message}`);
         setSaving(false);
         return;
       }
     }
+
     setSaving(false);
     setModalOpen(false);
     loadData();
@@ -332,7 +343,14 @@ export function SpareParts() {
                     <td>
                       <button 
                         onClick={() => {
-                          setForm(p as any);
+                          setForm({
+                            ...emptyForm,
+                            ...p,
+                            installation_date: p.installation_date || '',
+                            vehicle_plate: p.vehicle_plate || '',
+                            serial_number: p.serial_number || '',
+                            manufacturer: p.manufacturer || '',
+                          });
                           setEditId(p.id);
                           setModalOpen(true);
                         }} 
