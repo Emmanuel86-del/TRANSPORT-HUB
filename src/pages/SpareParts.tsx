@@ -101,7 +101,7 @@ export function SpareParts() {
     URL.revokeObjectURL(url);
   };
 
-  // Robust Case-Insensitive Smart Spare Parts Usage Upload Handler
+  // Smart Spare Parts Usage & Auto-Deduction Upload Handler with Fuzzy/Root Matching
   const handleSparePartsUsageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -120,7 +120,7 @@ export function SpareParts() {
     let successCount = 0;
     let failedItems: string[] = [];
 
-    // Fetch all current parts from database for memory lookup
+    // Fetch all parts from database for memory lookup
     const { data: allParts } = await supabase.from('spare_parts').select('id, name');
 
     for (let i = 1; i < lines.length; i++) {
@@ -134,11 +134,20 @@ export function SpareParts() {
 
       if (!partName || qtyUsed <= 0) continue;
 
-      // Case-insensitive exact match in memory
-      const existingPart = allParts?.find(p => p.name.trim().toLowerCase() === partName.toLowerCase());
+      // Normalize root word (e.g. "BATTERIES" -> "batter" / "battery", "TYRES" -> "tyre")
+      const normalizedSearch = partName.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
+
+      // Smart match against database names in memory
+      const existingPart = allParts?.find(p => {
+        const dbName = p.name.trim().toLowerCase();
+        const dbNormalized = dbName.replace(/ies$/, 'y').replace(/s$/, '');
+        return dbName === partName.toLowerCase() || 
+               dbNormalized.includes(normalizedSearch) || 
+               normalizedSearch.includes(dbNormalized);
+      });
 
       if (existingPart) {
-        // Insert work record (Database trigger automatically handles deduction)
+        // 2. Insert work record (Database trigger automatically handles deduction)
         const { error } = await supabase.from('work_records').insert({
           part_id: existingPart.id,
           quantity_used: qtyUsed,
