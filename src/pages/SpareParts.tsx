@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Wrench, AlertTriangle, Bell, Edit, Plus, Package, Upload } from 'lucide-react';
+import { Wrench, AlertTriangle, Bell, Edit, Plus, Package, Upload, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
@@ -73,6 +73,34 @@ export function SpareParts() {
     loadData();
   };
 
+  // Download CSV Template for Master Inventory
+  const downloadInventoryTemplate = () => {
+    const headers = ['name', 'category', 'quantity', 'unit_price', 'vehicle_plate', 'serial_number', 'manufacturer', 'guarantee_months'];
+    const sampleRow = ['Bridgestone Tyre', 'tyres', '10', '25000', 'KAA 001A', '', '', '12'];
+    const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `spare_parts_inventory_template.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Download CSV Template for Used Spare Parts (Usage Log)
+  const downloadUsageTemplate = () => {
+    const headers = ['part_name', 'quantity_used'];
+    const sampleRow = ['Bridgestone Tyre', '2'];
+    const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `parts_usage_template.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Smart Spare Parts Usage & Auto-Deduction Upload Handler
   const handleSparePartsUsageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -140,7 +168,19 @@ export function SpareParts() {
           onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
           addLabel="Add Spare Part" 
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button 
+            onClick={downloadInventoryTemplate} 
+            className="btn-secondary flex items-center gap-1.5 text-xs"
+          >
+            <Download className="h-4 w-4 text-blue-600" /> Parts Template
+          </button>
+          <button 
+            onClick={downloadUsageTemplate} 
+            className="btn-secondary flex items-center gap-1.5 text-xs"
+          >
+            <Download className="h-4 w-4 text-emerald-600" /> Usage Template
+          </button>
           <button 
             onClick={() => fileInputRef.current?.click()} 
             disabled={uploading} 
