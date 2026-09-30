@@ -1,3 +1,4 @@
+import { UniversalUploadModal } from '@/components/UniversalUpload';
 import { useEffect, useState, useCallback } from 'react';
 import { Truck, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
