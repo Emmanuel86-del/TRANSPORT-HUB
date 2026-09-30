@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
   Calculator, ClipboardList, Scale, FileText, Wallet,
-  Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon, ShieldCheck, UserCheck,
+  Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon, ShieldCheck, UserCheck, Upload,
 } from 'lucide-react';
 import { useAuth, AuthProvider } from '@/lib/auth';
 import { AuthPage } from '@/pages/AuthPage';
@@ -21,6 +21,7 @@ import { DailyDispatch } from '@/pages/DailyDispatch';
 import { Weighbridge } from '@/pages/Weighbridge';
 import { ClientDeliveries } from '@/pages/ClientDeliveries';
 import { Payroll } from '@/pages/Payroll';
+import { UniversalUploadModal } from '@/components/UniversalUpload';
 import { LoadingSpinner } from '@/components/Shared';
 import { UserRole, hasAccess } from '@/types';
 
@@ -65,6 +66,7 @@ const roleLabel = (role: UserRole) => {
 function AppContent() {
   const { user, profile, loading, authError, signOut, retry } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [universalModalOpen, setUniversalModalOpen] = useState(false);
 
   const getPageFromHash = (): Page => {
     const hash = window.location.hash.replace('#/', '') as Page;
@@ -182,19 +184,30 @@ function AppContent() {
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-20 flex items-center gap-3 bg-white border-b border-slate-200 px-4 py-3 lg:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-              <TruckIcon className="h-5 w-5" />
+        {/* Top Header Bar with Universal Upload Button */}
+        <header className="sticky top-0 z-20 flex items-center justify-between bg-white border-b border-slate-200 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
+                <TruckIcon className="h-5 w-5" />
+              </div>
+              <span className="font-bold text-slate-900 hidden sm:inline">Suraj Ashok Limited</span>
             </div>
-            <span className="font-bold text-slate-900">Suraj Ashok Limited</span>
           </div>
+
+          {/* Universal Upload Trigger */}
+          <button
+            onClick={() => setUniversalModalOpen(true)}
+            className="btn-primary flex items-center gap-2 text-xs py-2 px-3 shadow-sm"
+          >
+            <Upload className="h-4 w-4" /> Upload Document (Auto-Route)
+          </button>
         </header>
 
         <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -215,6 +228,16 @@ function AppContent() {
           {page === 'work-records' && <WorkRecords />}
         </main>
       </div>
+
+      {/* Universal Auto-Route Upload Modal */}
+      <UniversalUploadModal
+        isOpen={universalModalOpen}
+        onClose={() => setUniversalModalOpen(false)}
+        onSuccess={() => {
+          setUniversalModalOpen(false);
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }
