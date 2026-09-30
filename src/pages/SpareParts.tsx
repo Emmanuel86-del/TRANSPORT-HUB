@@ -73,7 +73,6 @@ export function SpareParts() {
   const savePart = async () => {
     setSaving(true);
 
-    // Sanitize payload: convert empty string fields to null for PostgreSQL compatibility
     const payload = {
       ...form,
       installation_date: form.installation_date || null,
@@ -131,7 +130,7 @@ export function SpareParts() {
     URL.revokeObjectURL(url);
   };
 
-  // Smart Spare Parts Usage & Auto-Deduction Upload Handler with Fuzzy/Root Matching
+  // Smart Spare Parts Usage & Auto-Deduction Upload Handler
   const handleSparePartsUsageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -150,8 +149,7 @@ export function SpareParts() {
     let successCount = 0;
     let failedItems: string[] = [];
 
-    // Fetch all parts from database for memory lookup
-    const { data: allParts } = await supabase.from('spare_parts').select('id, name');
+    const { data: allParts } = await supabase.from('spare_parts').select('id, name, quantity');
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
@@ -164,10 +162,8 @@ export function SpareParts() {
 
       if (!partName || qtyUsed <= 0) continue;
 
-      // Normalize root word (e.g. "BATTERIES" -> "batter" / "battery", "TYRES" -> "tyre")
       const normalizedSearch = partName.toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
 
-      // Smart match against database names in memory
       const existingPart = allParts?.find(p => {
         const dbName = p.name.trim().toLowerCase();
         const dbNormalized = dbName.replace(/ies$/, 'y').replace(/s$/, '');
@@ -177,17 +173,19 @@ export function SpareParts() {
       });
 
       if (existingPart) {
-        // Insert work record (Database trigger automatically handles deduction)
-        const { error } = await supabase.from('work_records').insert({
-          part_id: existingPart.id,
-          quantity_used: qtyUsed,
-          notes: `Auto-deducted via bulk usage upload`
-        });
+        const newQuantity = Math.max(0, (existingPart.quantity || 0) - qtyUsed);
+        
+        const { error } = await supabase
+          .from('spare_parts')
+          .update({ quantity: newQuantity })
+          .eq('id', existingPart.id);
 
         if (!error) {
           successCount++;
+          existingPart.quantity = newQuantity;
         } else {
-          failedItems.push(`${partName} (Insert error)`);
+          console.error(`Update error for ${partName}:`, error.message);
+          failedItems.push(`${partName} (${error.message})`);
         }
       } else {
         failedItems.push(`${partName} (Not found in inventory)`);
