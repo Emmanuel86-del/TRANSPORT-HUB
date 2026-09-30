@@ -116,7 +116,7 @@ export function UniversalUploadModal({ isOpen, onClose, onSuccess }: UniversalUp
           <div className="bg-slate-900 text-slate-200 rounded-xl p-3 text-xs font-mono space-y-1 max-h-40 overflow-y-auto">
             {log.map((entry, idx) => (
               <div key={idx} className="flex items-center gap-1.5">
-                <span>&gt;</span> <span>{entry}</span>
+                <span>{entry}</span>
               </div>
             ))}
           </div>
