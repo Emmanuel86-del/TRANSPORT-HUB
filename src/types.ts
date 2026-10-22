@@ -211,21 +211,19 @@ export type Profile = {
   created_at: string;
 };
 
-export type PayrollRecord = {
+export type PayrollEntry = {
   id: string;
-  employee_id: string | null;
-  payee_name: string;
-  pay_period_start: string | null;
-  pay_period_end: string | null;
-  pay_date: string;
-  gross_salary: number;
+  pay_period: string;
+  employee_name: string;
+  basic_salary: number;
+  allowances: number;
   deductions: number;
-  net_salary: number;
-  payment_method: string;
+  net_pay: number;
   status: string;
   notes: string | null;
+  attachment_url: string | null;
+  attachment_name: string | null;
   created_at: string;
-  employee?: Employee | null;
 };
 
-export type PayrollRecordInsert = Omit<PayrollRecord, 'id' | 'created_at' | 'employee'>;
+export type PayrollEntryInsert = Omit<PayrollEntry, 'id' | 'created_at'>;

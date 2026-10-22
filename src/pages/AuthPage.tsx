@@ -1,13 +1,6 @@
 import { useState } from 'react';
-import { Truck as TruckIcon, Mail, Lock, User, Shield, UserCog, Briefcase, Eye, EyeOff, AlertCircle, RefreshCw } from 'lucide-react';
+import { Truck as TruckIcon, Mail, Lock, User, Eye, EyeOff, AlertCircle, RefreshCw, UserCog } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { UserRole } from '@/types';
-
-const roleOptions: { value: UserRole; label: string; icon: React.ReactNode; desc: string }[] = [
-  { value: 'employee', label: 'Employee', icon: <UserCog className="h-6 w-6" />, desc: 'Operational access only' },
-  { value: 'manager', label: 'Manager', icon: <Briefcase className="h-6 w-6" />, desc: 'Operational + management access' },
-  { value: 'corporate_admin', label: 'Corporate Admin', icon: <Shield className="h-6 w-6" />, desc: 'Full access to all modules' },
-];
 
 export function AuthPage() {
   const { signIn, signUp, authError, retry, loading: authLoading } = useAuth();
@@ -15,7 +8,6 @@ export function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<UserRole>('employee');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,7 +34,7 @@ export function AuthPage() {
         setLoading(false);
         return;
       }
-      const { error } = await signUp(email, password, fullName, role);
+      const { error } = await signUp(email, password, fullName);
       if (error) {
         setError(error);
         setLoading(false);
@@ -160,25 +152,13 @@ export function AuthPage() {
             </div>
 
             {mode === 'signup' && (
-              <div>
-                <label className="label">Account Type</label>
-                <div className="space-y-2">
-                  {roleOptions.map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setRole(opt.value)}
-                      className={`flex items-center gap-3 w-full rounded-xl border-2 p-3 transition-all text-left ${role === opt.value ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-300'}`}
-                    >
-                      <div className={`shrink-0 ${role === opt.value ? 'text-blue-600' : 'text-slate-400'}`}>
-                        {opt.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className={`text-sm font-medium block ${role === opt.value ? 'text-blue-700' : 'text-slate-600'}`}>{opt.label}</span>
-                        <span className="text-xs text-slate-400">{opt.desc}</span>
-                      </div>
-                    </button>
-                  ))}
+              <div className="flex items-center gap-3 rounded-xl border-2 border-slate-200 bg-slate-50 p-3">
+                <div className="shrink-0 text-slate-400">
+                  <UserCog className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <span className="text-sm font-medium text-slate-600 block">Employee Account</span>
+                  <span className="text-xs text-slate-400">All new accounts start as Employee. A Corporate Admin can promote you after sign-up.</span>
                 </div>
               </div>
             )}

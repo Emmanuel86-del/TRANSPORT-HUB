@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  LayoutDashboard, Route, Truck, Users, UserCog, Package, Wrench,
+  LayoutDashboard, Route, Truck, Users as UsersIcon, UserCog, Package, Wrench,
   Calculator, ClipboardList, Scale, FileText, Wallet,
   Menu, X, LogOut, Shield, Briefcase, Truck as TruckIcon, ShieldCheck, UserCheck, Upload,
 } from 'lucide-react';
@@ -21,11 +21,12 @@ import { DailyDispatch } from '@/pages/DailyDispatch';
 import { Weighbridge } from '@/pages/Weighbridge';
 import { ClientDeliveries } from '@/pages/ClientDeliveries';
 import { Payroll } from '@/pages/Payroll';
+import { Users } from '@/pages/Users';
 import { UniversalUploadModal } from '@/components/UniversalUpload';
 import { LoadingSpinner } from '@/components/Shared';
 import { UserRole, hasAccess } from '@/types';
 
-type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'fleet-compliance' | 'drivers' | 'driver-compliance' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'products' | 'spare-parts' | 'work-records';
+type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'fleet-compliance' | 'drivers' | 'driver-compliance' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'users' | 'products' | 'spare-parts' | 'work-records';
 
 type NavItem = { id: Page; label: string; icon: React.ReactNode; minRole: UserRole };
 
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { id: 'client-deliveries', label: 'Client Deliveries', icon: <FileText className="h-5 w-5" />, minRole: 'manager' },
   { id: 'rate-matrix', label: 'Rate Matrix', icon: <Calculator className="h-5 w-5" />, minRole: 'corporate_admin' },
   { id: 'payroll', label: 'Payroll', icon: <Wallet className="h-5 w-5" />, minRole: 'corporate_admin' },
+  { id: 'users', label: 'Users', icon: <UsersIcon className="h-5 w-5" />, minRole: 'corporate_admin' },
 ];
 
 const roleIcon = (role: UserRole) => {
@@ -223,6 +225,7 @@ function AppContent() {
           {page === 'weighbridge' && <Weighbridge />}
           {page === 'client-deliveries' && canAccess('manager') && <ClientDeliveries />}
           {page === 'payroll' && canAccess('corporate_admin') && <Payroll />}
+          {page === 'users' && canAccess('corporate_admin') && <Users />}
           {page === 'products' && <Products />}
           {page === 'spare-parts' && <SpareParts />}
           {page === 'work-records' && <WorkRecords />}

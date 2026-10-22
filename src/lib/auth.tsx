@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { Profile, UserRole } from '@/types';
+import { Profile } from '@/types';
 
 type AuthState = {
   session: Session | null;
@@ -10,7 +10,7 @@ type AuthState = {
   loading: boolean;
   authError: string | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   retry: () => void;
 };
@@ -120,13 +120,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, fullName: string, role: UserRole) => {
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
     setAuthError(null);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName, role },
+        data: { full_name: fullName, role: 'employee' },
       },
     });
     if (error) {
