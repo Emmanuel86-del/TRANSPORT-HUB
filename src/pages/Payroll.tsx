@@ -81,7 +81,7 @@ export function Payroll() {
 
     const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
     const rows = lines.slice(1).map(line => {
-      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"\vert{}"$/g, ''));
+      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"|"$/g, ''));
       const obj: any = {};
       headers.forEach((h, i) => { obj[h] = values[i] || null; });
       const basic = Number(obj.basic_salary) || 0;

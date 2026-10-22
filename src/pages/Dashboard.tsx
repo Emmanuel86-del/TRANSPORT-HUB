@@ -81,7 +81,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Total Revenue"
-          value={`$${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          value={`KES ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
           icon={<DollarSign className="h-6 w-6" />}
           color="emerald"
           trend={{ value: `${completedTrips.length} completed trips`, up: true }}
@@ -95,13 +95,13 @@ export function Dashboard() {
         />
         <StatCard
           label="Fuel Costs"
-          value={`$${totalFuelCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          value={`KES ${totalFuelCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
           icon={<Fuel className="h-6 w-6" />}
           color="amber"
         />
         <StatCard
           label="Maintenance Costs"
-          value={`$${totalWorkCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+          value={`KES ${totalWorkCost.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
           icon={<Wrench className="h-6 w-6" />}
           color="rose"
         />
@@ -143,7 +143,7 @@ export function Dashboard() {
                         />
                       </div>
                       <span className="text-xs font-medium text-emerald-600 w-20 text-right">
-                        ${data.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        KES {data.revenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ export function Dashboard() {
                         />
                       </div>
                       <span className="text-xs font-medium text-amber-600 w-20 text-right">
-                        ${data.fuel.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        KES {data.fuel.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </span>
                     </div>
                   </div>
@@ -218,7 +218,7 @@ export function Dashboard() {
                   <div className="text-right">
                     {trip.freight_amount && (
                       <p className="text-sm font-semibold text-emerald-600">
-                        ${trip.freight_amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        KES {trip.freight_amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </p>
                     )}
                     <span className={`text-xs ${trip.status === 'completed' ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -254,7 +254,7 @@ export function Dashboard() {
                   <div className="text-right">
                     {((work.labor_cost || 0) + (work.parts_cost || 0)) > 0 && (
                       <p className="text-sm font-semibold text-slate-700">
-                        ${((work.labor_cost || 0) + (work.parts_cost || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        KES {((work.labor_cost || 0) + (work.parts_cost || 0)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </p>
                     )}
                     <span className="text-xs text-emerald-600">{work.status}</span>

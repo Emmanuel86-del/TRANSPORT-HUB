@@ -51,7 +51,7 @@ export function DailyDispatch() {
       counts[v.plate_number] = { daily_count: 0, monthly_count: 0 };
     }
     for (const t of tripsRes.data || []) {
-      const plate = (tripsRes.data || []).find(x => x.id === t.id)?.vehicle?.plate_number;
+      const plate = t.vehicle?.plate_number;
       if (!plate) continue;
       if (t.trip_date === selectedDate) counts[plate].daily_count++;
       if (t.trip_date.startsWith(selectedMonth)) counts[plate].monthly_count++;

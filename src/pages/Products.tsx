@@ -171,7 +171,7 @@ export function Products() {
       </div>
 
       <div className="text-sm font-medium text-slate-600">
-        Total Value: <span className="text-emerald-600">${totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+        Total Value: <span className="text-emerald-600">KES {totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
       </div>
 
       {loading ? (
@@ -200,9 +200,9 @@ export function Products() {
                   <td className="font-medium text-slate-800">{p.name}</td>
                   <td>{p.category || '—'}</td>
                   <td>{p.quantity} {p.unit}</td>
-                  <td>{p.unit_price ? `$${p.unit_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}</td>
+                  <td>{p.unit_price ? `KES ${p.unit_price.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '—'}</td>
                   <td className="font-semibold text-emerald-600">
-                    {p.unit_price ? `$${((p.quantity || 0) * p.unit_price).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
+                    {p.unit_price ? `KES ${((p.quantity || 0) * p.unit_price).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}
                   </td>
                   <td>{p.destination || '—'}</td>
                   <td>
@@ -273,7 +273,7 @@ export function Products() {
             <input type="number" className="input" value={form.quantity ?? 0} onChange={e => update('quantity', e.target.value ? Number(e.target.value) : 0)} />
           </div>
           <div>
-            <label className="label">Unit Price ($)</label>
+            <label className="label">Unit Price (KES)</label>
             <input type="number" className="input" value={form.unit_price ?? ''} onChange={e => update('unit_price', e.target.value ? Number(e.target.value) : null)} />
           </div>
           <div>

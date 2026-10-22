@@ -20,9 +20,12 @@ export type Driver = {
   phone: string | null;
   license_number: string | null;
   license_expiry: string | null;
+  national_id: string | null;
   status: string;
   hire_date: string | null;
   notes: string | null;
+  attachment_url: string | null;
+  attachment_name: string | null;
   created_at: string;
 };
 
@@ -79,6 +82,8 @@ export type Product = {
   destination: string | null;
   trip_id: string | null;
   status: string;
+  attachment_url: string | null;
+  attachment_name: string | null;
   created_at: string;
 };
 
