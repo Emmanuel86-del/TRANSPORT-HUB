@@ -10,17 +10,17 @@ declare global {
 }
 
 const MONITOR_COLORS = {
-  bg: '#0B1437',
-  card: '#0F1F4A',
-  accent: '#00E5FF',
-  active: '#00BFA5',
-  parkedLate: '#FF6D00',
-  workshop: '#F57C00',
-  offline: '#B71C1C',
-  inProgress: '#1565C0',
-  border: '#1E3A5F',
-  textDim: '#94A3B8',
-  rowAlt: '#0D1B47',
+  bg: '#120505',          // Deep maroon dark background matching app theme
+  card: '#1F0B0B',        // Rich maroon card background
+  accent: '#FFB703',      // Warm amber/gold accent
+  active: '#2A9D8F',      // Active status green/teal
+  parkedLate: '#F4A261',  // Warning orange
+  workshop: '#E76F51',    // Workshop rust orange
+  offline: '#D90429',     // Crimson red for offline/alerts
+  inProgress: '#457B9D',  // Muted blue for in-progress
+  border: '#3A1414',      // Deep maroon border
+  textDim: '#A89F9F',     // Soft muted text
+  rowAlt: '#180707',      // Alternate row maroon
 };
 
 const SUB_ACCOUNT_OPTIONS: { value: string; label: string }[] = [
@@ -341,27 +341,49 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  // Map initialization with invalidateSize fix
+  // Map initialization with safe retry for CDN script loading
   useEffect(() => {
-    if (!mapRef.current || !window.L || mapInstanceRef.current) return;
+    let timer: any;
+    let isMounted = true;
 
-    mapInstanceRef.current = window.L.map(mapRef.current, {
-      center: MOMBASA_CENTER,
-      zoom: 14,
-      zoomControl: true,
-    });
-
-    updateMapTiles();
-    drawGeofences();
-
-    // Fix for blank map tiles: recalculate dimensions after render
-    const timer = setTimeout(() => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.invalidateSize();
+    const initMap = () => {
+      if (!mapRef.current || !isMounted) return;
+      
+      // Wait for Leaflet CDN script to load if not ready yet
+      if (!window.L) {
+        timer = setTimeout(initMap, 100);
+        return;
       }
-    }, 250);
+      
+      if (mapInstanceRef.current) return;
 
-    return () => clearTimeout(timer);
+      mapInstanceRef.current = window.L.map(mapRef.current, {
+        center: MOMBASA_CENTER,
+        zoom: 14,
+        zoomControl: true,
+      });
+
+      updateMapTiles();
+      drawGeofences();
+
+      // Recalculate size after render
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize();
+        }
+      }, 250);
+    };
+
+    initMap();
+
+    return () => {
+      isMounted = false;
+      if (timer) clearTimeout(timer);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
   }, []);
 
   const updateMapTiles = () => {
@@ -404,7 +426,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     markersRef.current = [];
 
     unitStatuses.forEach(u => {
-      const hasActive = u.badges.some(b => b.color === MONITOR_COLORS.active || b.color === MONITOR_COLORS.inProgress);
       const isOverdue = u.badges.some(b => b.color === MONITOR_COLORS.offline && b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
       const isWorkshop = u.badges.some(b => b.label === 'INSIDE WORKSHOP');
       const isParked = u.badges.some(b => b.label.includes('PARKED'));
@@ -510,7 +531,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   return (
     <div className="space-y-4 animate-fade-in" style={{ background: MONITOR_COLORS.bg, minHeight: '100vh', padding: '20px', color: '#fff', fontFamily: 'monospace' }}>
       {/* SECTION 1: STICKY LIVE HEADER */}
-      <div className="sticky top-0 z-10 rounded-xl p-4" style={{ ...panelStyle, borderLeft: `3px solid ${MONITOR_COLORS.accent}` }}>
+      <div className="sticky top-0 z-10 rounded-xl p-4 shadow-md" style={{ ...panelStyle, borderLeft: `3px solid ${MONITOR_COLORS.accent}` }}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="text-2xl font-bold tracking-wider" style={{ color: MONITOR_COLORS.accent }}>{timeStr}</div>
@@ -531,8 +552,8 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
             </div>
             <button
               onClick={loadData}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors hover:opacity-80"
-              style={{ background: MONITOR_COLORS.accent, color: MONITOR_COLORS.bg }}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors hover:opacity-80 shadow"
+              style={{ background: MONITOR_COLORS.accent, color: '#120505' }}
             >
               <RefreshCw className="h-3.5 w-3.5" /> REFRESH NOW
             </button>
@@ -562,7 +583,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
             <button
               key={card.key}
               onClick={() => setActiveCard(isActive ? null : card.key)}
-              className="shrink-0 w-48 rounded-xl p-3 text-left transition-all hover:scale-[1.02]"
+              className="shrink-0 w-48 rounded-xl p-3 text-left transition-all hover:scale-[1.02] shadow-sm"
               style={{
                 ...panelStyle,
                 border: `2px solid ${borderClr}`,
@@ -588,7 +609,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       </div>
 
       {/* SECTION 3: UNIT BOARD */}
-      <div style={panelStyle}>
+      <div style={panelStyle} className="shadow-sm">
         <div className="flex items-center justify-between" style={headerStyle}>
           <span>UNIT BOARD · CLICK A UNIT TO SEE ITS TRIP TIMES TODAY</span>
           <span style={{ color: MONITOR_COLORS.accent }}>{filteredUnits.length} units</span>
@@ -687,7 +708,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       </div>
 
       {/* SECTION 4: STOPPED OUTSIDE ALLOWED AREAS */}
-      <div style={{ ...panelStyle, borderLeft: `3px solid ${MONITOR_COLORS.parkedLate}` }}>
+      <div style={{ ...panelStyle, borderLeft: `3px solid ${MONITOR_COLORS.parkedLate}` }} className="shadow-sm">
         <div style={headerStyle}>
           <span style={{ color: MONITOR_COLORS.parkedLate }}>STOPPED OUTSIDE ALLOWED AREAS</span>
         </div>
@@ -725,7 +746,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       {/* SECTIONS 5+6+7: BOTTOM GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* SECTION 5: TRIP LOG */}
-        <div style={panelStyle}>
+        <div style={panelStyle} className="shadow-sm">
           <div className="flex items-center justify-between" style={headerStyle}>
             <span>TRIP LOG · {tripLog.completed.length} COMPLETED · {tripLog.inProgress.length} IN PROGRESS</span>
           </div>
@@ -766,7 +787,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         </div>
 
         {/* SECTION 6: TRIPS BY HOUR CHART */}
-        <div style={panelStyle}>
+        <div style={panelStyle} className="shadow-sm">
           <div style={headerStyle}>TRIPS BY HOUR</div>
           <div className="p-4">
             <ResponsiveBarChart data={tripsByHour} currentHour={currentHour} />
@@ -774,7 +795,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         </div>
 
         {/* SECTION 7: LIVE MAP */}
-        <div style={panelStyle} className="lg:col-span-2">
+        <div style={panelStyle} className="lg:col-span-2 shadow-sm">
           <div className="flex items-center justify-between" style={headerStyle}>
             <span>LIVE MAP · {unitStatuses.length} UNITS ON MAP</span>
             <button
