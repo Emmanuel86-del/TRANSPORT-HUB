@@ -339,7 +339,7 @@ export function SparePartsV2({
           <select className="input w-48 text-sm py-1.5" value={filterSubAccount} onChange={e => setFilterSubAccount(e.target.value)}>
             <option value="">All Sub-Accounts</option>
             <option value="mcl">MCL</option>
-            <option value="tahmal">TAHMAL</option>
+            <option value="tarmal">TARMAL</option>
             <option value="csl">CSL</option>
             <option value="mushroom">MUSHROOM</option>
           </select>
