@@ -55,8 +55,9 @@ export function WorkspaceShell({
     onTabChange(tab);
     setSidebarOpen(false);
 
-    const basePath = `/${portal.slug}`;
-    const newPath = (tab === 'live-monitor' || tab === 'dashboard')
+    // Use pathForSlug to correctly resolve /admin for master and /{slug} for sub-accounts
+    const basePath = pathForSlug(portal.slug);
+    const newPath = (tab === 'live-monitor' || tab === 'dashboard' || tab === 'overview')
       ? basePath
       : `${basePath}/${tab}`;
     
