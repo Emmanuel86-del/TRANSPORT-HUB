@@ -106,7 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (newSession?.user) {
         const userProfile = await fetchProfile(newSession.user.id);
-        // Only update profile if successfully fetched; prevents dropping profile on network hiccups
         if (userProfile) {
           setProfile(userProfile);
           if (userProfile?.sub_account) {
@@ -134,13 +133,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const userProfile = await fetchProfile(data.user.id);
         if (userProfile) {
           setProfile(userProfile);
-        }
-
-        const currentSlug = getCurrentSlug();
-        const userSubAccount = userProfile?.sub_account ?? 'master';
-
-        if (userSubAccount !== 'master' && currentSlug !== userSubAccount) {
-          window.location.replace(pathForSlug(userSubAccount));
         }
       }
 
