@@ -8,13 +8,13 @@ import { LoadingSpinner } from '@/components/Shared';
 
 // Existing pages
 import { Dashboard } from '@/pages/Dashboard';
-import { SpareParts } from '@/pages/SpareParts';
 import { Users } from '@/pages/Users';
 
 // New sub-account pages
 import { SubAccountTrips } from '@/pages/SubAccountTrips';
 import { SubAccountTallies } from '@/pages/SubAccountTallies';
 import { SubAccountFuel } from '@/pages/SubAccountFuel';
+import { SparePartsV2 } from '@/pages/SparePartsV2';
 
 // Placeholder pages
 import {
@@ -90,6 +90,7 @@ function AppContent() {
         case 'csl': return <SubAccountViewPage color={PORTALS.csl.color} name={PORTALS.csl.fullName} />;
         case 'mushroom': return <SubAccountViewPage color={PORTALS.mushroom.color} name={PORTALS.mushroom.fullName} />;
         case 'users': return <Users />;
+        case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
         case 'compliance': return <CompliancePage color={portal.color} />;
         case 'reports': return <ReportsPage color={portal.color} />;
         default: return <OverviewPage color={portal.color} />;
@@ -103,7 +104,7 @@ function AppContent() {
       case 'trips': return <SubAccountTrips mclArea={mclArea} portalColor={portal.color} />;
       case 'fuel': return <SubAccountFuel mclArea={mclArea} portalColor={portal.color} />;
       case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
-      case 'spare-parts': return <SpareParts />;
+      case 'spare-parts': return <SparePartsV2 mclArea={mclArea} portalColor={portal.color} />;
       case 'containers': return <ContainersPage color={portal.color} />;
       case 'reports': return <ReportsPage color={portal.color} />;
       default: return <Dashboard />;

@@ -82,6 +82,7 @@ const MASTER_TABS: NavTab[] = [
   { id: 'csl', label: 'CSL', icon: 'Building2' },
   { id: 'mushroom', label: 'MUSHROOM', icon: 'Building2' },
   { id: 'users', label: 'Users', icon: 'Users' },
+  { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
   { id: 'compliance', label: 'Compliance', icon: 'ShieldCheck' },
   { id: 'reports', label: 'Reports', icon: 'FileText' },
 ];

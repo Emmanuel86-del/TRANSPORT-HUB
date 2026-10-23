@@ -15,7 +15,7 @@ export function getSubAccountFilter(): string | null {
   return currentSubAccount;
 }
 
-const EXCLUDED_TABLES = new Set(['profiles']);
+const EXCLUDED_TABLES = new Set(['profiles', 'spare_part_history']);
 
 function shouldFilter(table: string): boolean {
   if (EXCLUDED_TABLES.has(table)) return false;
