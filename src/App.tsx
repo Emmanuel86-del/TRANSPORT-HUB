@@ -87,7 +87,7 @@ function AppContent() {
         case 'live-monitor': return <LiveMonitorPage color={portal.color} />;
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'mcl': return <SubAccountViewPage color={PORTALS.mcl.color} name={PORTALS.mcl.fullName} />;
-        case 'tahmal': return <SubAccountViewPage color={PORTALS.tahmal.color} name={PORTALS.tahmal.fullName} />;
+        case 'tarmal': return <SubAccountViewPage color={PORTALS.tarmal.color} name={PORTALS.tarmal.fullName} />;
         case 'csl': return <SubAccountViewPage color={PORTALS.csl.color} name={PORTALS.csl.fullName} />;
         case 'mushroom': return <SubAccountViewPage color={PORTALS.mushroom.color} name={PORTALS.mushroom.fullName} />;
         case 'users': return <Users />;
