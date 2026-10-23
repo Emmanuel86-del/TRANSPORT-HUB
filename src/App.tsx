@@ -25,7 +25,7 @@ import { Users } from '@/pages/Users';
 import { UniversalUploadModal } from '@/components/UniversalUpload';
 import { LoadingSpinner } from '@/components/Shared';
 import { UserRole, hasAccess } from '@/types';
-import { portalFromPath, PORTALS } from '@/lib/portals';
+import { portalFromPath, slugFromPath, PORTALS } from '@/lib/portals';
 
 type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'fleet-compliance' | 'drivers' | 'driver-compliance' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'users' | 'products' | 'spare-parts' | 'work-records';
 
@@ -87,7 +87,15 @@ function AppContent() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const portal = portalFromPath(window.location.pathname) ?? PORTALS.master;
+  const pathSlug = slugFromPath(window.location.pathname);
+  const portal = pathSlug ? (portalFromPath(window.location.pathname) ?? PORTALS.master) : PORTALS.master;
+
+  // Redirect unknown paths to /admin
+  useEffect(() => {
+    if (!pathSlug) {
+      window.location.replace('/admin');
+    }
+  }, [pathSlug]);
 
   if (loading) {
     return (

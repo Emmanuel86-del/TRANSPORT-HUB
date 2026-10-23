@@ -80,6 +80,10 @@ export function slugFromPath(pathname: string): SubAccount | null {
   return PATH_TO_SLUG[clean] ?? null;
 }
 
+export function slugFromPathOrDefault(pathname: string): SubAccount {
+  return slugFromPath(pathname) ?? 'master';
+}
+
 export function portalFromPath(pathname: string): PortalConfig | null {
   const slug = slugFromPath(pathname);
   return slug ? PORTALS[slug] : null;

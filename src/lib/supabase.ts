@@ -30,46 +30,101 @@ function stampValues(values: any): any {
   return { ...values, sub_account: values.sub_account ?? sa };
 }
 
+/**
+ * Wraps a Supabase query builder so that any chained method calls
+ * are forwarded transparently, but select/update/delete get an
+ * automatic .eq('sub_account', slug) filter prepended for non-master
+ * portals on non-excluded tables.
+ *
+ * The wrapper preserves full chainability (.order, .limit, .eq, .single, etc.)
+ * by proxying every property access and binding functions to the real builder.
+ */
+function wrapBuilder(builder: any, table: string, filterApplied = false): any {
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      // Don't intercept Symbols (e.g. Symbol.toPrimitive, Symbol.iterator)
+      if (typeof prop === 'symbol') {
+        return Reflect.get(target, prop, receiver);
+      }
+
+      const value = Reflect.get(target, prop, receiver);
+
+      // Non-function properties pass through as-is
+      if (typeof value !== 'function') {
+        return value;
+      }
+
+      // For methods, return a bound function that wraps the result
+      return function (...args: any[]) {
+        // Apply the sub_account filter before select/update/delete
+        // by intercepting the verb call itself
+        let result;
+        const needsFilter = shouldFilter(table) && !filterApplied;
+
+        if (prop === 'select' && needsFilter) {
+          result = value.apply(target, args);
+          result = result.eq('sub_account', currentSubAccount);
+          return wrapBuilder(result, table, true);
+        }
+
+        if (prop === 'delete' && needsFilter) {
+          result = value.apply(target, args);
+          result = result.eq('sub_account', currentSubAccount);
+          return wrapBuilder(result, table, true);
+        }
+
+        if (prop === 'update' && needsFilter) {
+          result = value.apply(target, args);
+          result = result.eq('sub_account', currentSubAccount);
+          return wrapBuilder(result, table, true);
+        }
+
+        if (prop === 'insert') {
+          result = value.call(target, stampValues(args[0]), ...args.slice(1));
+          if (result && typeof result.then === 'function') return result;
+          return wrapBuilder(result, table, filterApplied);
+        }
+
+        if (prop === 'upsert') {
+          result = value.call(target, stampValues(args[0]), ...args.slice(1));
+          if (result && typeof result.then === 'function') return result;
+          return wrapBuilder(result, table, filterApplied);
+        }
+
+        // Default: call the method and wrap any chained builder result
+        result = value.apply(target, args);
+
+        // If result is a promise (terminal call like .single(), .maybeSingle(),
+        // .then, or the data/error response), don't wrap it
+        if (result && typeof result.then === 'function') {
+          return result;
+        }
+
+        // If result is another builder (chainable), wrap it
+        if (result && typeof result === 'object') {
+          return wrapBuilder(result, table, filterApplied);
+        }
+
+        return result;
+      };
+    },
+  });
+}
+
 export const supabase = new Proxy(rawClient, {
   get(target, prop, receiver) {
     if (prop === 'from') {
-      return (table: string) => {
-        const builder = target.from(table);
-        return new Proxy(builder, {
-          get(bTarget, bProp) {
-            if (bProp === 'select') {
-              return (...args: any[]) => {
-                const result = bTarget.select(...args);
-                return shouldFilter(table) ? result.eq('sub_account', currentSubAccount) : result;
-              };
-            }
-            if (bProp === 'insert') {
-              return (values: any, ...rest: any[]) => {
-                return bTarget.insert(stampValues(values), ...rest);
-              };
-            }
-            if (bProp === 'update') {
-              return (values: any, ...rest: any[]) => {
-                const result = bTarget.update(values, ...rest);
-                return shouldFilter(table) ? result.eq('sub_account', currentSubAccount) : result;
-              };
-            }
-            if (bProp === 'upsert') {
-              return (values: any, ...rest: any[]) => {
-                return bTarget.upsert(stampValues(values), ...rest);
-              };
-            }
-            if (bProp === 'delete') {
-              return (...args: any[]) => {
-                const result = bTarget.delete(...args);
-                return shouldFilter(table) ? result.eq('sub_account', currentSubAccount) : result;
-              };
-            }
-            return (bTarget as any)[bProp];
-          },
-        });
+      const originalFrom = Reflect.get(target, prop, receiver);
+      return function (table: string) {
+        const builder = originalFrom.call(target, table);
+        return wrapBuilder(builder, table);
       };
     }
-    return Reflect.get(target, prop, receiver);
+
+    const value = Reflect.get(target, prop, receiver);
+    if (typeof value === 'function') {
+      return value.bind(target);
+    }
+    return value;
   },
 }) as unknown as SupabaseClient;

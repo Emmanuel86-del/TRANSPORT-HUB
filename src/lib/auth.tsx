@@ -89,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (userSubAccount === 'master') {
-      window.location.pathname = '/admin';
+      window.location.replace('/admin');
       return null;
     }
 
