@@ -80,6 +80,31 @@ function isStale(lastUpdate: Date | null, now: Date): boolean {
   return (now.getTime() - lastUpdate.getTime()) > 5 * 60 * 1000;
 }
 
+// Loads Leaflet's CSS + JS on demand if window.L isn't already available.
+function loadLeaflet(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.L) return resolve();
+
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css';
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+
+    let script = document.getElementById('leaflet-js') as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement('script');
+      script.id = 'leaflet-js';
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      document.body.appendChild(script);
+    }
+    script.addEventListener('load', () => resolve());
+    script.addEventListener('error', () => reject(new Error('Leaflet failed to load')));
+  });
+}
+
 export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: string; subAccountFilter?: string }) {
   const { profile } = useAuth();
   const [now, setNow] = useState(new Date());
@@ -94,7 +119,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<TripWithRelations | null>(null);
   const [mapToggle, setMapToggle] = useState<'satellite' | 'map'>('satellite');
-  
+
   const mapRef = useRef<any>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -330,50 +355,43 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  // Leaflet Map Initialization with Forced Container Sizing & InvalidateSize loops
+  // Leaflet map initialization.
+  // The map <div> only exists once `loading` is false (the skeleton is shown before that),
+  // so the map is created after loading finishes and torn down whenever loading starts again.
   useEffect(() => {
-    let timer: any;
-    let isMounted = true;
+    if (loading) return;
 
-    const initMap = () => {
-      if (!mapRef.current || !isMounted) return;
+    let cancelled = false;
 
-      if (!window.L) {
-        timer = setTimeout(initMap, 100);
-        return;
-      }
+    loadLeaflet()
+      .then(() => {
+        if (cancelled || !mapRef.current || mapInstanceRef.current) return;
 
-      if (mapInstanceRef.current) return;
+        mapInstanceRef.current = window.L.map(mapRef.current, {
+          center: MOMBASA_CENTER,
+          zoom: 13,
+          zoomControl: true,
+        });
 
-      mapInstanceRef.current = window.L.map(mapRef.current, {
-        center: MOMBASA_CENTER,
-        zoom: 13,
-        zoomControl: true,
-      });
+        updateMapLayers();
 
-      updateMapLayers();
-
-      // Force recalculate tile panes multiple times to guarantee rendering
-      [100, 300, 600, 1000].forEach(delay => {
-        setTimeout(() => {
-          if (mapInstanceRef.current) {
-            mapInstanceRef.current.invalidateSize(true);
-          }
-        }, delay);
-      });
-    };
-
-    initMap();
+        // Force recalculate tile panes multiple times to guarantee rendering
+        [100, 300, 600, 1000].forEach(delay =>
+          setTimeout(() => mapInstanceRef.current?.invalidateSize(true), delay)
+        );
+      })
+      .catch(err => console.error(err));
 
     return () => {
-      isMounted = false;
-      if (timer) clearTimeout(timer);
+      cancelled = true;
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
+      layersRef.current = [];
+      markersRef.current = [];
     };
-  }, []);
+  }, [loading]);
 
   const updateMapLayers = () => {
     if (!mapInstanceRef.current || !window.L) return;
@@ -442,6 +460,17 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
   };
 
+  const resetMapView = () => {
+    mapInstanceRef.current?.setView(MOMBASA_CENTER, 13);
+  };
+
+  const fitToUnits = () => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.L || markersRef.current.length === 0) return;
+    const group = window.L.featureGroup(markersRef.current);
+    map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 15 });
+  };
+
   useEffect(() => {
     if (mapInstanceRef.current) {
       updateMapLayers();
@@ -496,6 +525,12 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     fontWeight: 700,
     letterSpacing: '0.05em',
     textTransform: 'uppercase' as const,
+  };
+
+  const mapButtonStyle: React.CSSProperties = {
+    background: MONITOR_COLORS.bg,
+    color: MONITOR_COLORS.accent,
+    border: `1px solid ${MONITOR_COLORS.border}`,
   };
 
   return (
@@ -778,15 +813,31 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         <div style={panelStyle} className="lg:col-span-2 shadow-sm">
           <div className="flex items-center justify-between" style={headerStyle}>
             <span>LIVE MAP · {unitStatuses.length} UNITS TRACKED</span>
-            <button
-              onClick={() => setMapToggle(prev => prev === 'map' ? 'satellite' : 'map')}
-              className="rounded-lg px-3 py-1 text-xs font-bold transition-colors"
-              style={{ background: MONITOR_COLORS.bg, color: MONITOR_COLORS.accent, border: `1px solid ${MONITOR_COLORS.border}` }}
-            >
-              VIEW: {mapToggle.toUpperCase()}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fitToUnits}
+                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors"
+                style={mapButtonStyle}
+              >
+                FIT UNITS
+              </button>
+              <button
+                onClick={resetMapView}
+                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors"
+                style={mapButtonStyle}
+              >
+                RESET VIEW
+              </button>
+              <button
+                onClick={() => setMapToggle(prev => (prev === 'map' ? 'satellite' : 'map'))}
+                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors"
+                style={mapButtonStyle}
+              >
+                VIEW: {mapToggle.toUpperCase()}
+              </button>
+            </div>
           </div>
-          
+
           <div style={{ height: '420px', width: '100%', position: 'relative' }}>
             <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
           </div>
