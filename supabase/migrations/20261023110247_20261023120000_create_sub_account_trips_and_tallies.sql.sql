@@ -28,7 +28,7 @@ Sub-account-scoped trip records with fuel, mileage, and cost tracking.
 - `mileage_payment` (numeric, nullable) — auto-calculated from route_rates
 - `labour_cost` (numeric, nullable) — labour cost in KES
 - `other_costs` (numeric, nullable) — other costs in KES
-- `start_odometer` (numeric, nullable) — TAHMAL: starting odometer reading
+- `start_odometer` (numeric, nullable) — TARMAL: starting odometer reading
 - `end_odometer` (numeric, nullable) — TAHMAL: ending odometer reading
 - `distance_km` (numeric, nullable) — TAHMAL: auto = end - start
 - `status` (text, NOT NULL, default 'planned') — planned, in_transit, completed, cancelled
