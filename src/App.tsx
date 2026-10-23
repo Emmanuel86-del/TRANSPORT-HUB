@@ -15,10 +15,11 @@ import { SubAccountTrips } from '@/pages/SubAccountTrips';
 import { SubAccountTallies } from '@/pages/SubAccountTallies';
 import { SubAccountFuel } from '@/pages/SubAccountFuel';
 import { SparePartsV2 } from '@/pages/SparePartsV2';
+import { ContainersPage } from '@/pages/ContainersPage';
 
 // Placeholder pages
 import {
-  LiveMonitorPage, ContainersPage, ReportsPage,
+  LiveMonitorPage, ReportsPage,
   OverviewPage, CompliancePage, SubAccountViewPage,
 } from '@/pages/PlaceholderPages';
 
@@ -91,6 +92,7 @@ function AppContent() {
         case 'mushroom': return <SubAccountViewPage color={PORTALS.mushroom.color} name={PORTALS.mushroom.fullName} />;
         case 'users': return <Users />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
+        case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} />;
         case 'compliance': return <CompliancePage color={portal.color} />;
         case 'reports': return <ReportsPage color={portal.color} />;
         default: return <OverviewPage color={portal.color} />;
@@ -100,14 +102,14 @@ function AppContent() {
     // Sub-account portal tabs
     switch (activeTab) {
       case 'live-monitor': return <LiveMonitorPage color={portal.color} />;
-      case 'dashboard': return <Dashboard />;
+      case 'dashboard': return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} />;
       case 'trips': return <SubAccountTrips mclArea={mclArea} portalColor={portal.color} />;
       case 'fuel': return <SubAccountFuel mclArea={mclArea} portalColor={portal.color} />;
       case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
       case 'spare-parts': return <SparePartsV2 mclArea={mclArea} portalColor={portal.color} />;
-      case 'containers': return <ContainersPage color={portal.color} />;
+      case 'containers': return <ContainersPage mclArea={mclArea} portalColor={portal.color} />;
       case 'reports': return <ReportsPage color={portal.color} />;
-      default: return <Dashboard />;
+      default: return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} />;
     }
   };
 

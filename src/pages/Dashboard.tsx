@@ -7,8 +7,10 @@ import { supabase } from '@/lib/supabase';
 import { StatCard } from '@/components/StatCard';
 import { Trip, Vehicle, Driver, SparePart, WorkRecord } from '@/types';
 import { LoadingSpinner } from '@/components/Shared';
+import { ContainersDueSoonAlert } from '@/components/ContainersDueSoonAlert';
+import { MCLArea } from '@/lib/portals';
 
-export function Dashboard() {
+export function Dashboard({ mclArea, onViewAllContainers }: { mclArea?: MCLArea | null; onViewAllContainers?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -35,7 +37,9 @@ export function Dashboard() {
     load();
   }, []);
 
-  if (loading) return <LoadingSpinner message="Loading dashboard..." />;
+  if (loading) return <LoadingSpinner message="Loading dashboard..." />
+
+  const portalColor = '#2563EB';;
 
   const activeTrips = trips.filter(t => t.status === 'in_progress' || t.status === 'scheduled');
   const completedTrips = trips.filter(t => t.status === 'completed');
@@ -106,6 +110,15 @@ export function Dashboard() {
           color="rose"
         />
       </div>
+
+      {/* Containers Due Soon Alert */}
+      {onViewAllContainers && (
+        <ContainersDueSoonAlert
+          mclArea={mclArea ?? null}
+          portalColor={portalColor}
+          onViewAll={onViewAllContainers}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Active Vehicles" value={String(activeVehicles.length)} icon={<Truck className="h-6 w-6" />} color="blue" />

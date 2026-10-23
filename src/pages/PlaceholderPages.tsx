@@ -54,10 +54,6 @@ export function TalliesPage({ color }: { color: string }) {
   return <PlaceholderPage title="Tallies" subtitle="Daily tally records and summaries" iconName="Calculator" iconColor={color} />;
 }
 
-export function ContainersPage({ color }: { color: string }) {
-  return <PlaceholderPage title="Containers" subtitle="Container tracking and management" iconName="Package" iconColor={color} />;
-}
-
 export function ReportsPage({ color }: { color: string }) {
   return <PlaceholderPage title="Reports" subtitle="Generate and export operational reports" iconName="FileText" iconColor={color} />;
 }
