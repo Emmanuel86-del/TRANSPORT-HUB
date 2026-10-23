@@ -54,17 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setAuthError(null);
 
-    const safetyTimer = setTimeout(() => {
-      setLoading(false);
-    }, 6000);
-
     try {
       const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
         setAuthError(sessionError.message);
         setLoading(false);
-        clearTimeout(safetyTimer);
         return;
       }
 
@@ -82,7 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       setAuthError('Connection error. Please try again.');
     } finally {
-      clearTimeout(safetyTimer);
       setLoading(false);
     }
   }, [fetchProfile]);
