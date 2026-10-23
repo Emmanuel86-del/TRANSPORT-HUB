@@ -74,15 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 6000);
+    }, 8000);
 
     try {
       const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
         setAuthError(sessionError.message);
-        setLoading(false);
         clearTimeout(safetyTimer);
+        setLoading(false);
         return;
       }
 
@@ -90,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(currentSession?.user ?? null);
 
       if (currentSession?.user) {
+        // Await profile completely before clearing loading state to prevent role flash
         const userProfile = await fetchProfile(currentSession.user.id, currentSession.user.email);
         setProfile(userProfile);
         if (userProfile?.sub_account) {
