@@ -14,10 +14,11 @@ import { Users } from '@/pages/Users';
 // New sub-account pages
 import { SubAccountTrips } from '@/pages/SubAccountTrips';
 import { SubAccountTallies } from '@/pages/SubAccountTallies';
+import { SubAccountFuel } from '@/pages/SubAccountFuel';
 
 // Placeholder pages
 import {
-  LiveMonitorPage, FuelPage, ContainersPage, ReportsPage,
+  LiveMonitorPage, ContainersPage, ReportsPage,
   OverviewPage, CompliancePage, SubAccountViewPage,
 } from '@/pages/PlaceholderPages';
 
@@ -100,7 +101,7 @@ function AppContent() {
       case 'live-monitor': return <LiveMonitorPage color={portal.color} />;
       case 'dashboard': return <Dashboard />;
       case 'trips': return <SubAccountTrips mclArea={mclArea} portalColor={portal.color} />;
-      case 'fuel': return <FuelPage color={portal.color} />;
+      case 'fuel': return <SubAccountFuel mclArea={mclArea} portalColor={portal.color} />;
       case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
       case 'spare-parts': return <SpareParts />;
       case 'containers': return <ContainersPage color={portal.color} />;
