@@ -16,10 +16,12 @@ import { SubAccountTallies } from '@/pages/SubAccountTallies';
 import { SubAccountFuel } from '@/pages/SubAccountFuel';
 import { SparePartsV2 } from '@/pages/SparePartsV2';
 import { ContainersPage } from '@/pages/ContainersPage';
+import { ReportsPage } from '@/pages/ReportsPage';
+import { MasterReportsPage } from '@/pages/MasterReportsPage';;
 
 // Placeholder pages
 import {
-  LiveMonitorPage, ReportsPage,
+  LiveMonitorPage,
   OverviewPage, CompliancePage, SubAccountViewPage,
 } from '@/pages/PlaceholderPages';
 
@@ -78,7 +80,7 @@ function AppContent() {
     return <MCLAreaSelection portal={portal} onAreaSelected={(area) => setMclArea(area)} />;
   }
 
-  const isMaster = pathSlug === 'admin';
+  const isMaster = pathSlug === 'master';
 
   const renderTabContent = () => {
     // Master portal tabs
@@ -94,7 +96,7 @@ function AppContent() {
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
         case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} />;
         case 'compliance': return <CompliancePage color={portal.color} />;
-        case 'reports': return <ReportsPage color={portal.color} />;
+        case 'reports': return <MasterReportsPage portalColor={portal.color} />;
         default: return <OverviewPage color={portal.color} />;
       }
     }
@@ -108,7 +110,7 @@ function AppContent() {
       case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
       case 'spare-parts': return <SparePartsV2 mclArea={mclArea} portalColor={portal.color} />;
       case 'containers': return <ContainersPage mclArea={mclArea} portalColor={portal.color} />;
-      case 'reports': return <ReportsPage color={portal.color} />;
+      case 'reports': return <ReportsPage mclArea={mclArea} portalColor={portal.color} />;
       default: return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} />;
     }
   };
