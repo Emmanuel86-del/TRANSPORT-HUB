@@ -53,7 +53,7 @@ type UnitStatus = {
   activeWorkRecord?: WorkRecord | null;
 };
 
-type CardKey = 'trips_today' | 'inside_mcl' | 'towards_mcl' | 'inside_workshop' | 'towards_ngamani' | 'parked_late' | 'stopped_outside' | 'offline' | 'latest_trip';
+type CardKey = 'trips_today' | 'inside_mcl' | 'towards_mcl' | 'inside_workshop' | 'towards_ngamani' | 'parked_late' | 'stopped_outside' | 'offline' | 'latest_trip' | 'compliance_due';
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${Math.round(minutes)}M`;
@@ -119,6 +119,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<TripWithRelations | null>(null);
   const [mapToggle, setMapToggle] = useState<'satellite' | 'map'>('satellite');
+  const [complianceDue, setComplianceDue] = useState<{ labels: string[]; count: number }>({ labels: [], count: 0 });
 
   const mapRef = useRef<any>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -152,15 +153,45 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         workQuery = (workQuery as any).eq('sub_account', filter);
       }
 
-      const [tripRes, vehicleRes, workRes] = await Promise.all([
+      let vcQuery = supabase
+        .from('vehicle_compliance_items')
+        .select('expiry_date, vehicle:vehicles(plate_number)')
+        .not('expiry_date', 'is', null);
+      let dcQuery = supabase
+        .from('driver_compliance_items')
+        .select('expiry_date, driver:drivers(name)')
+        .not('expiry_date', 'is', null);
+
+      if (filter !== 'all') {
+        vcQuery = (vcQuery as any).eq('sub_account', filter);
+        dcQuery = (dcQuery as any).eq('sub_account', filter);
+      }
+
+      const [tripRes, vehicleRes, workRes, vcRes, dcRes] = await Promise.all([
         tripQuery,
         vehicleQuery,
         workQuery,
+        vcQuery,
+        dcQuery,
       ]);
 
       setTrips((tripRes.data as any) || []);
       setVehicles((vehicleRes.data as any) || []);
       setWorkRecords((workRes.data as any) || []);
+
+      const nowMs = Date.now();
+      const dueLabels: string[] = [];
+      ((vcRes.data as any[]) || []).forEach((i: any) => {
+        if (!i.expiry_date) return;
+        const days = Math.ceil((new Date(i.expiry_date).getTime() - nowMs) / 86400000);
+        if (days <= 7) dueLabels.push(i.vehicle?.plate_number || '—');
+      });
+      ((dcRes.data as any[]) || []).forEach((i: any) => {
+        if (!i.expiry_date) return;
+        const days = Math.ceil((new Date(i.expiry_date).getTime() - nowMs) / 86400000);
+        if (days <= 7) dueLabels.push(i.driver?.name || '—');
+      });
+      setComplianceDue({ labels: dueLabels, count: dueLabels.length });
       setLastUpdate(new Date());
       setNextRefresh(300);
     } catch (err) {
@@ -300,8 +331,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       { key: 'stopped_outside' as CardKey, label: 'STOPPED OUTSIDE', count: stoppedOutside.length, plates: platesFromTrips(stoppedOutside), borderColor: MONITOR_COLORS.parkedLate },
       { key: 'offline' as CardKey, label: 'OFFLINE', count: offline.length, plates: offline.map(v => v.plate_number), borderColor: MONITOR_COLORS.offline },
       { key: 'latest_trip' as CardKey, label: 'LATEST TRIP', count: null, plates: latestTrip ? [latestTrip.vehicle?.plate_number || '—'] : [], latestTrip, borderColor: MONITOR_COLORS.accent },
+      { key: 'compliance_due' as CardKey, label: 'COMPLIANCE DUE', count: complianceDue.count, plates: complianceDue.labels, borderColor: MONITOR_COLORS.offline },
     ];
-  }, [trips, vehicles, workRecords, now]);
+  }, [trips, vehicles, workRecords, now, complianceDue]);
 
   const filteredUnits = useMemo(() => {
     if (!activeCard) return unitStatuses;
@@ -314,6 +346,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       if (activeCard === 'parked_late') return u.badges.some(b => b.label.includes('PARKED'));
       if (activeCard === 'stopped_outside') return u.badges.some(b => b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
       if (activeCard === 'offline') return u.badges.some(b => b.label === 'NO SIGNAL');
+      if (activeCard === 'compliance_due') return false; // no unit filtering for compliance card
       return true;
     });
   }, [unitStatuses, activeCard]);

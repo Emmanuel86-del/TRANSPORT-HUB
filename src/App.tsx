@@ -107,7 +107,7 @@ function AppContent() {
     // Sub-account portal tabs
     switch (activeTab) {
       case 'live-monitor': return <LiveMonitor color={portal.color} subAccountFilter={portal.slug} />;
-      case 'dashboard': return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} />;
+      case 'dashboard': return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
       case 'trips': return <SubAccountTrips mclArea={mclArea} portalColor={portal.color} />;
       case 'fuel': return <SubAccountFuel mclArea={mclArea} portalColor={portal.color} />;
       case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
@@ -118,7 +118,7 @@ function AppContent() {
           ? <CompliancePageFull mclArea={mclArea} portalColor={portal.color} />
           : <div className="flex flex-col items-center justify-center gap-3 py-20 text-center"><p className="text-sm text-slate-500">You need manager access to view compliance records.</p></div>;
       case 'reports': return <ReportsPage mclArea={mclArea} portalColor={portal.color} />;
-      default: return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} />;
+      default: return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
     }
   };
 

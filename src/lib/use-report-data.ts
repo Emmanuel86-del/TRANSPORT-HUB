@@ -51,14 +51,14 @@ export function useReportData(filters: ReportFilters, isMaster: boolean, masterS
       .order('created_at', { ascending: false });
 
     let vcQ = supabase
-      .from('vehicle_compliance')
+      .from('vehicle_compliance_items')
       .select('*, vehicle:vehicles(plate_number)')
-      .order('updated_at', { ascending: false });
+      .order('expiry_date', { ascending: true, nullsFirst: false });
 
     let dcQ = supabase
-      .from('driver_compliance')
+      .from('driver_compliance_items')
       .select('*, driver:drivers(name)')
-      .order('updated_at', { ascending: false });
+      .order('expiry_date', { ascending: true, nullsFirst: false });
 
     const vehQ = supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number');
     const drvQ = supabase.from('drivers').select('id, name').order('name');

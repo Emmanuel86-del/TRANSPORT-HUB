@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   Truck, Users, Wrench, Package, Route, Fuel, DollarSign,
-  AlertTriangle, TrendingUp, Calendar,
+  AlertTriangle, TrendingUp, Calendar, ShieldCheck, ChevronRight,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { StatCard } from '@/components/StatCard';
@@ -10,28 +10,52 @@ import { LoadingSpinner } from '@/components/Shared';
 import { ContainersDueSoonAlert } from '@/components/ContainersDueSoonAlert';
 import { MCLArea } from '@/lib/portals';
 
-export function Dashboard({ mclArea, onViewAllContainers }: { mclArea?: MCLArea | null; onViewAllContainers?: () => void }) {
+export function Dashboard({ mclArea, onViewAllContainers, onViewCompliance }: { mclArea?: MCLArea | null; onViewAllContainers?: () => void; onViewCompliance?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [spareParts, setSpareParts] = useState<SparePart[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecord[]>([]);
+  const [complianceAlerts, setComplianceAlerts] = useState<{ id: string; label: string; type: string; days: number | null; isVehicle: boolean }[]>([]);
 
   useEffect(() => {
     async function load() {
-      const [tripsRes, vehiclesRes, driversRes, partsRes, workRes] = await Promise.all([
+      const [tripsRes, vehiclesRes, driversRes, partsRes, workRes, vcRes, dcRes] = await Promise.all([
         supabase.from('trips').select('*, driver:drivers(*), vehicle:vehicles(*)').order('trip_date', { ascending: false }).limit(50),
         supabase.from('vehicles').select('*'),
         supabase.from('drivers').select('*'),
         supabase.from('spare_parts').select('*'),
         supabase.from('work_records').select('*').order('work_date', { ascending: false }),
+        supabase.from('vehicle_compliance_items').select('id, vehicle_id, compliance_type, expiry_date, vehicle:vehicles(plate_number)').order('expiry_date', { ascending: true, nullsFirst: false }),
+        supabase.from('driver_compliance_items').select('id, driver_id, compliance_type, expiry_date, driver:drivers(name)').order('expiry_date', { ascending: true, nullsFirst: false }),
       ]);
       setTrips(tripsRes.data || []);
       setVehicles(vehiclesRes.data || []);
       setDrivers(driversRes.data || []);
       setSpareParts(partsRes.data || []);
       setWorkRecords(workRes.data || []);
+
+      const now = Date.now();
+      const vAlerts = ((vcRes.data as any[]) || []).map((i: any) => ({
+        id: i.id,
+        label: i.vehicle?.plate_number || 'Unknown',
+        type: i.compliance_type,
+        days: i.expiry_date ? Math.ceil((new Date(i.expiry_date).getTime() - now) / 86400000) : null,
+        isVehicle: true,
+      }));
+      const dAlerts = ((dcRes.data as any[]) || []).map((i: any) => ({
+        id: i.id,
+        label: i.driver?.name || 'Unknown',
+        type: i.compliance_type,
+        days: i.expiry_date ? Math.ceil((new Date(i.expiry_date).getTime() - now) / 86400000) : null,
+        isVehicle: false,
+      }));
+      const all = [...vAlerts, ...dAlerts]
+        .filter(a => a.days != null && a.days <= 30)
+        .sort((a, b) => (a.days! - b.days!));
+      setComplianceAlerts(all.slice(0, 5));
+
       setLoading(false);
     }
     load();
@@ -118,6 +142,46 @@ export function Dashboard({ mclArea, onViewAllContainers }: { mclArea?: MCLArea 
           portalColor={portalColor}
           onViewAll={onViewAllContainers}
         />
+      )}
+
+      {/* Compliance Alerts */}
+      {complianceAlerts.length > 0 && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className={`h-5 w-5 ${complianceAlerts.some(a => a.days! < 0) ? 'text-red-500' : 'text-amber-500'}`} />
+              <h3 className={`text-base font-semibold ${complianceAlerts.some(a => a.days! < 0) ? 'text-red-700' : 'text-slate-900'}`}>
+                Compliance Alerts
+              </h3>
+            </div>
+            {onViewCompliance && (
+              <button onClick={onViewCompliance} className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
+                View all <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            {complianceAlerts.map(a => {
+              const isExpired = a.days! < 0;
+              const isWeek = a.days! >= 0 && a.days! <= 7;
+              const bgClass = isExpired ? 'bg-red-50 border-red-200' : isWeek ? 'bg-orange-50 border-orange-200' : 'bg-amber-50 border-amber-200';
+              const daysText = isExpired ? `${Math.abs(a.days!)} days ago` : `${a.days} days`;
+              const daysColor = isExpired ? 'text-red-700' : isWeek ? 'text-orange-700' : 'text-amber-700';
+              return (
+                <div key={a.id} className={`flex items-center justify-between rounded-lg border px-3 py-2.5 ${bgClass}`}>
+                  <div className="flex items-center gap-3">
+                    {a.isVehicle ? <Truck className="h-4 w-4 text-slate-500" /> : <Users className="h-4 w-4 text-slate-500" />}
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{a.label}</p>
+                      <p className="text-xs text-slate-500 capitalize">{a.type.replace(/_/g, ' ')}</p>
+                    </div>
+                  </div>
+                  <span className={`text-xs font-semibold ${daysColor}`}>{daysText}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

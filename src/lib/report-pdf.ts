@@ -428,35 +428,25 @@ function buildDefaultSections(
       build: (_doc: any, y: number, _c: [number, number, number]) => {
         y = sectionHeader('7. Compliance', y);
         const now = new Date();
-        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
         const expiringItems: string[] = [];
         const expiredItems: string[] = [];
-
-        const checkExpiry = (label: string, expiry: string | null, vehicleLabel: string) => {
-          if (!expiry) return;
-          const d = new Date(expiry);
-          if (d < now) {
-            expiredItems.push(`${vehicleLabel}: ${label} expired ${expiry}`);
-          } else if (d <= monthEnd) {
-            expiringItems.push(`${vehicleLabel}: ${label} expiring ${expiry}`);
-          }
-        };
+        const in30 = new Date(now.getTime() + 30 * 86400000);
 
         data.vehicleCompliance.forEach((vc: any) => {
-          const v = vc.vehicle?.plate_number || 'Unknown';
-          checkExpiry('Insurance', vc.insurance_expiry, v);
-          checkExpiry('COMESA', vc.comesa_expiry, v);
-          checkExpiry('NTSA Inspection', vc.ntsa_inspection_expiry, v);
-          checkExpiry('Truck Insurance', vc.truck_insurance_expiry, v);
-          checkExpiry('Trailer Insurance', vc.trailer_insurance_expiry, v);
+          if (!vc.expiry_date) return;
+          const d = new Date(vc.expiry_date);
+          const label = `${vc.vehicle?.plate_number || 'Unknown'}: ${(vc.compliance_type || '').replace(/_/g, ' ')}`;
+          if (d < now) expiredItems.push(`${label} expired ${vc.expiry_date}`);
+          else if (d <= in30) expiringItems.push(`${label} expiring ${vc.expiry_date}`);
         });
 
         data.driverCompliance.forEach((dc: any) => {
-          const d = dc.driver?.name || 'Unknown';
-          checkExpiry('License', dc.license_expiry, d);
-          checkExpiry('Compliance', dc.compliance_expiry, d);
-          checkExpiry('ATIC Insurance', dc.atic_insurance_expiry, d);
+          if (!dc.expiry_date) return;
+          const d = new Date(dc.expiry_date);
+          const label = `${dc.driver?.name || 'Unknown'}: ${(dc.compliance_type || '').replace(/_/g, ' ')}`;
+          if (d < now) expiredItems.push(`${label} expired ${dc.expiry_date}`);
+          else if (d <= in30) expiringItems.push(`${label} expiring ${dc.expiry_date}`);
         });
 
         y = tableRow('Expiring This Month', String(expiringItems.length), y, true);

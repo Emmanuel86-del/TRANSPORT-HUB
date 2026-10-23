@@ -54,8 +54,8 @@ export function MasterReportsPage({ portalColor }: { portalColor: string }) {
         supabase.from('sub_account_tallies').select('*, vehicle:vehicles(plate_number)').gte('tally_date', from).lte('tally_date', to).eq('sub_account', sa).order('tally_date', { ascending: false }),
         supabase.from('spare_parts_v2').select('*, vehicle:vehicles(plate_number)').eq('sub_account', sa).order('created_at', { ascending: false }),
         supabase.from('sub_account_containers').select('*, vehicle:vehicles(plate_number)').eq('sub_account', sa).order('created_at', { ascending: false }),
-        supabase.from('vehicle_compliance').select('*, vehicle:vehicles(plate_number)').eq('sub_account', sa).order('updated_at', { ascending: false }),
-        supabase.from('driver_compliance').select('*, driver:drivers(name)').eq('sub_account', sa).order('updated_at', { ascending: false }),
+        supabase.from('vehicle_compliance_items').select('*, vehicle:vehicles(plate_number)').eq('sub_account', sa).order('expiry_date', { ascending: true, nullsFirst: false }),
+        supabase.from('driver_compliance_items').select('*, driver:drivers(name)').eq('sub_account', sa).order('expiry_date', { ascending: true, nullsFirst: false }),
         supabase.from('vehicles').select('id, plate_number, make, model').eq('sub_account', sa).order('plate_number'),
         supabase.from('drivers').select('id, name').eq('sub_account', sa).order('name'),
       ]);

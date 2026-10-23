@@ -269,30 +269,46 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
 
   // Section 7: Compliance
   const now = new Date();
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const in30 = new Date(now.getTime() + 30 * 86400000);
   const complianceExpiring: string[] = [];
   const complianceExpired: string[] = [];
 
-  const checkExpiry = (label: string, expiry: string | null, vehicleLabel: string) => {
-    if (!expiry) return;
-    const d = new Date(expiry);
-    if (d < now) complianceExpired.push(`${vehicleLabel}: ${label} (expired ${expiry})`);
-    else if (d <= monthEnd) complianceExpiring.push(`${vehicleLabel}: ${label} (expiring ${expiry})`);
+  data.vehicleCompliance.forEach((vc: any) => {
+    if (!vc.expiry_date) return;
+    const d = new Date(vc.expiry_date);
+    const label = `${vc.vehicle?.plate_number || 'Unknown'}: ${(vc.compliance_type || '').replace(/_/g, ' ')}`;
+    if (d < now) complianceExpired.push(`${label} (expired ${vc.expiry_date})`);
+    else if (d <= in30) complianceExpiring.push(`${label} (expiring ${vc.expiry_date})`);
+  });
+  data.driverCompliance.forEach((dc: any) => {
+    if (!dc.expiry_date) return;
+    const d = new Date(dc.expiry_date);
+    const label = `${dc.driver?.name || 'Unknown'}: ${(dc.compliance_type || '').replace(/_/g, ' ')}`;
+    if (d < now) complianceExpired.push(`${label} (expired ${dc.expiry_date})`);
+    else if (d <= in30) complianceExpiring.push(`${label} (expiring ${dc.expiry_date})`);
+  });
+
+  // Weekly compliance: expired during last week, expiring in coming week
+  const lwStart = lastWeek.start.getTime();
+  const lwEnd = lastWeek.end.getTime();
+  const cwEnd = currentWeek.end.getTime();
+  const expiredThisWeek: string[] = [];
+  const expiringNextWeek: string[] = [];
+
+  const checkWeekly = (expiryDate: string | null, label: string) => {
+    if (!expiryDate) return;
+    const t = new Date(expiryDate).getTime();
+    if (t >= lwStart && t <= lwEnd) expiredThisWeek.push(`${label} (${expiryDate})`);
+    else if (t > lwEnd && t <= cwEnd) expiringNextWeek.push(`${label} (${expiryDate})`);
   };
 
   data.vehicleCompliance.forEach((vc: any) => {
-    const v = vc.vehicle?.plate_number || 'Unknown';
-    checkExpiry('Insurance', vc.insurance_expiry, v);
-    checkExpiry('COMESA', vc.comesa_expiry, v);
-    checkExpiry('NTSA', vc.ntsa_inspection_expiry, v);
-    checkExpiry('Truck Ins.', vc.truck_insurance_expiry, v);
-    checkExpiry('Trailer Ins.', vc.trailer_insurance_expiry, v);
+    if (!vc.expiry_date) return;
+    checkWeekly(vc.expiry_date, `${vc.vehicle?.plate_number || 'Unknown'}: ${(vc.compliance_type || '').replace(/_/g, ' ')}`);
   });
   data.driverCompliance.forEach((dc: any) => {
-    const d = dc.driver?.name || 'Unknown';
-    checkExpiry('License', dc.license_expiry, d);
-    checkExpiry('Compliance', dc.compliance_expiry, d);
-    checkExpiry('ATIC', dc.atic_insurance_expiry, d);
+    if (!dc.expiry_date) return;
+    checkWeekly(dc.expiry_date, `${dc.driver?.name || 'Unknown'}: ${(dc.compliance_type || '').replace(/_/g, ' ')}`);
   });
 
   return (
@@ -504,6 +520,23 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
               <p className={`text-xl font-bold ${complianceExpired.length > 0 ? 'text-red-600' : 'text-slate-800'}`}>{complianceExpired.length + complianceExpiring.length}</p>
             </div>
           </div>
+
+          {(expiredThisWeek.length > 0 || expiringNextWeek.length > 0) && (
+            <div className="space-y-2">
+              {expiredThisWeek.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-red-600 mb-1">New Expirations This Week</p>
+                  {expiredThisWeek.map((item, i) => <p key={i} className="text-xs text-slate-600 pl-2">• {item}</p>)}
+                </div>
+              )}
+              {expiringNextWeek.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-600 mb-1">Expiring Coming Week</p>
+                  {expiringNextWeek.map((item, i) => <p key={i} className="text-xs text-slate-600 pl-2">• {item}</p>)}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-2">
             <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
