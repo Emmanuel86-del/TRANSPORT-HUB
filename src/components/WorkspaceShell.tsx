@@ -168,7 +168,7 @@ export function WorkspaceShell({
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowSwitcher(false)} />
                     <div className="absolute left-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white shadow-xl z-20 py-1 animate-fade-in">
-                      {(['mcl', 'tahmal', 'csl', 'mushroom'] as SubAccount[]).map(slug => {
+                      {(['mcl', 'tarmal', 'csl', 'mushroom'] as SubAccount[]).map(slug => {
                         const p = PORTALS[slug];
                         return (
                           <button
