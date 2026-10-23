@@ -115,29 +115,34 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const filter = effectiveFilter;
-    let tripQuery = supabase.from('trips').select('*, vehicle:vehicles(*), driver:drivers(*)').eq('trip_date', todayStr);
-    let vehicleQuery = supabase.from('vehicles').select('*');
-    let workQuery = supabase.from('work_records').select('*, vehicle:vehicles(*)').eq('work_date', todayStr);
+    try {
+      const filter = effectiveFilter;
+      let tripQuery = supabase.from('trips').select('*, vehicle:vehicles(*), driver:drivers(*)').eq('trip_date', todayStr);
+      let vehicleQuery = supabase.from('vehicles').select('*');
+      let workQuery = supabase.from('work_records').select('*, vehicle:vehicles(*)').eq('work_date', todayStr);
 
-    if (filter !== 'all') {
-      tripQuery = (tripQuery as any).eq('sub_account', filter);
-      vehicleQuery = (vehicleQuery as any).eq('sub_account', filter);
-      workQuery = (workQuery as any).eq('sub_account', filter);
+      if (filter !== 'all') {
+        tripQuery = (tripQuery as any).eq('sub_account', filter);
+        vehicleQuery = (vehicleQuery as any).eq('sub_account', filter);
+        workQuery = (workQuery as any).eq('sub_account', filter);
+      }
+
+      const [tripRes, vehicleRes, workRes] = await Promise.all([
+        tripQuery,
+        vehicleQuery,
+        workQuery,
+      ]);
+
+      setTrips((tripRes.data as any) || []);
+      setVehicles((vehicleRes.data as any) || []);
+      setWorkRecords((workRes.data as any) || []);
+      setLastUpdate(new Date());
+      setNextRefresh(300);
+    } catch (err) {
+      console.error('Error fetching live monitor data:', err);
+    } finally {
+      setLoading(false);
     }
-
-    const [tripRes, vehicleRes, workRes] = await Promise.all([
-      tripQuery,
-      vehicleQuery,
-      workQuery,
-    ]);
-
-    setTrips((tripRes.data as any) || []);
-    setVehicles((vehicleRes.data as any) || []);
-    setWorkRecords((workRes.data as any) || []);
-    setLastUpdate(new Date());
-    setNextRefresh(300);
-    setLoading(false);
   }, [effectiveFilter, todayStr]);
 
   useEffect(() => {
@@ -325,7 +330,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  // Leaflet Map Initialization with Polling for window.L
+  // Leaflet Map Initialization
   useEffect(() => {
     let timer: any;
     let isMounted = true;
@@ -373,14 +378,13 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     layersRef.current.forEach(l => mapInstanceRef.current.removeLayer(l));
     layersRef.current = [];
 
-    // Satellite vs Map tile URL
     const tileUrl = mapToggle === 'satellite'
       ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
     const attribution = mapToggle === 'satellite'
-      ? 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-      : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+      ? 'Esri'
+      : 'OpenStreetMap';
 
     const tileLayer = window.L.tileLayer(tileUrl, {
       attribution,
@@ -389,7 +393,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     tileLayer.addTo(mapInstanceRef.current);
     layersRef.current.push(tileLayer);
 
-    // Draw Geofences
     GEOFENCES.forEach(gf => {
       const polygon = window.L.polygon(gf.coords, {
         color: gf.color,
