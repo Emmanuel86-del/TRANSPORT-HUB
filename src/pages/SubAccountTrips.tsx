@@ -358,7 +358,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
             <input type="text" className="input" value={form.arrival_point} onChange={e => handleDepartureArrivalChange(form.departure_point, e.target.value)} placeholder="e.g. CSL" />
           </div>
 
-          {isTahmal && (
+          {isTarmal && (
             <>
               <div>
                 <label className="label">Destination City/Town</label>
