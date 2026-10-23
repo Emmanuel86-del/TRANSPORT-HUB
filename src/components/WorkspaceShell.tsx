@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useState, ReactNode, useEffect } from 'react';
 import * as Icons from 'lucide-react';
 import {
   Menu, X, LogOut, Truck as TruckIcon, Upload, Download,
@@ -50,10 +50,34 @@ export function WorkspaceShell({
   const userRole = profile?.role ?? 'employee';
   const tabs = allTabs;
 
+  // Handle tab navigation and update the browser URL bar instantly
   const navigate = (tab: TabId) => {
     onTabChange(tab);
     setSidebarOpen(false);
+
+    const basePath = `/${portal.slug}`;
+    const newPath = (tab === 'live-monitor' || tab === 'dashboard')
+      ? basePath
+      : `${basePath}/${tab}`;
+    
+    window.history.pushState(null, '', newPath);
   };
+
+  // Sync state if user uses browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const segments = window.location.pathname.split('/').filter(Boolean);
+      const tabSlug = segments[1] as TabId;
+      if (tabSlug) {
+        onTabChange(tabSlug);
+      } else {
+        onTabChange('live-monitor');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [onTabChange, portal.slug]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -182,7 +206,6 @@ export function WorkspaceShell({
                           <button
                             key={slug}
                             onClick={() => {
-                              // Switch active tab within the master admin view instead of changing the URL
                               onTabChange(slug as TabId);
                               setShowSwitcher(false);
                             }}
@@ -243,3 +266,6 @@ export function WorkspaceShell({
     </div>
   );
 }
+```[cite: 14]
+
+Once you update and commit this file[cite: 14], clicking any sidebar item will immediately reflect its name/path in the browser URL bar (e.g. `/csl/fuel`), and using the browser's back and forward buttons will switch pages seamlessly[cite: 14].
