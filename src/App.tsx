@@ -19,7 +19,7 @@ import { TyresPage } from '@/pages/TyresPage';
 import { CompliancePageFull } from '@/pages/CompliancePageFull';
 import { ContainersPage } from '@/pages/ContainersPage';
 import { ReportsPage } from '@/pages/ReportsPage';
-import { MasterReportsPage } from '@/pages/MasterReportsPage';;
+import { MasterReportsPage } from '@/pages/MasterReportsPage';
 
 // Placeholder pages
 import {
@@ -31,7 +31,15 @@ import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea } from '@/lib/por
 
 function AppContent() {
   const { user, profile, loading, authError, retry } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  
+  // Initialize activeTab directly from the current URL path to prevent resetting to dashboard/overview on re-renders
+  const getInitialTab = (): TabId => {
+    const segments = window.location.pathname.split('/').filter(Boolean);
+    const tabSlug = segments[1] as TabId;
+    return tabSlug || 'dashboard';
+  };
+
+  const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
   const [mclArea, setMclArea] = useState<MCLArea | null>(null);
 
   const pathSlug = slugFromPath(window.location.pathname);
