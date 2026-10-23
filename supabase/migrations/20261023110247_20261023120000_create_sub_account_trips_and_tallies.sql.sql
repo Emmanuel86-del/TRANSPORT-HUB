@@ -18,7 +18,7 @@ Sub-account-scoped trip records with fuel, mileage, and cost tracking.
 - `driver_id` (uuid, nullable, FK to drivers) — which driver
 - `departure_point` (text, nullable) — departure location
 - `arrival_point` (text, nullable) — arrival location
-- `destination_city` (text, nullable) — TAHMAL: destination city/town
+- `destination_city` (text, nullable) — TARMAL: destination city/town
 - `net_tallage` (numeric, nullable) — net tallage figure
 - `fuel_expected` (numeric, nullable) — expected fuel in liters
 - `fuel_actual` (numeric, nullable) — actual fuel consumed in liters
