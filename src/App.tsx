@@ -10,7 +10,7 @@ import { LoadingSpinner } from '@/components/Shared';
 import { Dashboard } from '@/pages/Dashboard';
 import { Users } from '@/pages/Users';
 
-// New sub-account pages
+// Sub-account pages
 import { SubAccountTrips } from '@/pages/SubAccountTrips';
 import { SubAccountTallies } from '@/pages/SubAccountTallies';
 import { SubAccountFuel } from '@/pages/SubAccountFuel';
@@ -21,13 +21,11 @@ import { ContainersPage } from '@/pages/ContainersPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { MasterReportsPage } from '@/pages/MasterReportsPage';
 
-// Placeholder pages
-import {
-  OverviewPage, CompliancePage, SubAccountViewPage,
-} from '@/pages/PlaceholderPages';
+// Placeholder and Monitor pages
+import { OverviewPage } from '@/pages/PlaceholderPages';
 import { LiveMonitor } from '@/pages/LiveMonitor';
 
-import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea } from '@/lib/portals';
+import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea, SubAccount } from '@/lib/portals';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -132,10 +130,17 @@ function AppContent() {
         case 'live-monitor': return <LiveMonitor color={portal.color} />;
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'dashboard': return <OverviewPage color={portal.color} />;
-        case 'mcl': return <SubAccountViewPage color={PORTALS.mcl.color} name={PORTALS.mcl.fullName} />;
-        case 'tarmal': return <SubAccountViewPage color={PORTALS.tarmal.color} name={PORTALS.tarmal.fullName} />;
-        case 'csl': return <SubAccountViewPage color={PORTALS.csl.color} name={PORTALS.csl.fullName} />;
-        case 'mushroom': return <SubAccountViewPage color={PORTALS.mushroom.color} name={PORTALS.mushroom.fullName} />;
+        
+        // Show the actual Dashboard summary for each sub-account tab
+        case 'mcl': 
+          return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+        case 'tarmal': 
+          return <Dashboard subAccountOverride="tarmal" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+        case 'csl': 
+          return <Dashboard subAccountOverride="csl" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+        case 'mushroom': 
+          return <Dashboard subAccountOverride="mushroom" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+        
         case 'users': return <Users />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
         case 'tyres': return <TyresPage mclArea={null} portalColor={portal.color} isMaster />;
