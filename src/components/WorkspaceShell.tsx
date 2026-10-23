@@ -48,8 +48,7 @@ export function WorkspaceShell({
 
   const allTabs = getTabsForPortal(portal.slug);
   const userRole = profile?.role ?? 'employee';
-  const canViewLiveMonitor = userRole === 'manager' || userRole === 'corporate_admin';
-  const tabs = canViewLiveMonitor ? allTabs : allTabs.filter(t => t.id !== 'live-monitor');
+  const tabs = allTabs;
 
   const navigate = (tab: TabId) => {
     onTabChange(tab);
