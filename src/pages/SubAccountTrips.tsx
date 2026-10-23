@@ -215,7 +215,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   return (
     <div className="space-y-5 animate-fade-in">
       <PageHeader
-        title={isTahmal ? 'Long Distance Trips' : 'Trips'}
+        title={isTarmal ? 'Long Distance Trips' : 'Trips'}
         subtitle={isMCL && mclArea ? `MCL — ${mclArea.charAt(0).toUpperCase() + mclArea.slice(1)} area operations` : 'Trip records with fuel, mileage, and cost tracking'}
         icon={<RouteIcon className="h-6 w-6" />}
         iconColor={portalColor}
