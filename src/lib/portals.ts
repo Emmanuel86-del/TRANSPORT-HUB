@@ -1,4 +1,4 @@
-export type SubAccount = 'mcl' | 'tahmal' | 'csl' | 'mushroom' | 'master';
+export type SubAccount = 'mcl' | 'tarmal' | 'csl' | 'mushroom' | 'master';
 
 export type MCLArea = 'vipingo' | 'ngamani' | 'tezo' | 'roka';
 
@@ -16,7 +16,7 @@ export type PortalConfig = {
 export type TabId =
   | 'live-monitor' | 'dashboard' | 'trips' | 'fuel' | 'tallies'
   | 'spare-parts' | 'containers' | 'reports' | 'overview'
-  | 'mcl' | 'tahmal' | 'csl' | 'mushroom' | 'users' | 'compliance';
+  | 'mcl' | 'tarmal' | 'csl' | 'mushroom' | 'users' | 'compliance';
 
 export type NavTab = {
   id: TabId;
@@ -30,8 +30,8 @@ export const PORTALS: Record<SubAccount, PortalConfig> = {
     color: '#1D4ED8', colorLight: '#3B82F6', colorDark: '#1E40AF',
     bgGradient: 'from-blue-600 to-blue-800', accentClass: 'blue',
   },
-  tahmal: {
-    slug: 'tahmal', name: 'TAHMAL', fullName: 'TAHMAL Logistics',
+  tarmal: {
+    slug: 'tarmal', name: 'TARMAL', fullName: 'TARMAL Logistics',
     color: '#15803D', colorLight: '#22C55E', colorDark: '#166534',
     bgGradient: 'from-emerald-600 to-emerald-800', accentClass: 'emerald',
   },
@@ -70,7 +70,7 @@ const SUB_ACCOUNT_TABS: NavTab[] = [
   { id: 'reports', label: 'Reports', icon: 'FileText' },
 ];
 
-const TAHMAL_TABS: NavTab[] = SUB_ACCOUNT_TABS.map(t =>
+const TARMAL_TABS: NavTab[] = SUB_ACCOUNT_TABS.map(t =>
   t.id === 'trips' ? { ...t, label: 'Long Distance Trips' } : t
 );
 
@@ -78,7 +78,7 @@ const MASTER_TABS: NavTab[] = [
   { id: 'live-monitor', label: 'Live Monitor', icon: 'Activity' },
   { id: 'overview', label: 'Overview', icon: 'LayoutDashboard' },
   { id: 'mcl', label: 'MCL', icon: 'Building2' },
-  { id: 'tahmal', label: 'TAHMAL', icon: 'Building2' },
+  { id: 'tarmal', label: 'TARMAL', icon: 'Building2' },
   { id: 'csl', label: 'CSL', icon: 'Building2' },
   { id: 'mushroom', label: 'MUSHROOM', icon: 'Building2' },
   { id: 'users', label: 'Users', icon: 'Users' },
@@ -89,15 +89,15 @@ const MASTER_TABS: NavTab[] = [
 ];
 
 export function getTabsForPortal(slug: SubAccount): NavTab[] {
-  if (slug === 'tahmal') return TAHMAL_TABS;
+  if (slug === 'tarmal') return TARMAL_TABS;
   if (slug === 'master') return MASTER_TABS;
   return SUB_ACCOUNT_TABS;
 }
 
-export const PORTAL_SLUGS: SubAccount[] = ['mcl', 'tahmal', 'csl', 'mushroom', 'master'];
+export const PORTAL_SLUGS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom', 'master'];
 
 const PATH_TO_SLUG: Record<string, SubAccount> = {
-  '/mcl': 'mcl', '/tahmal': 'tahmal', '/csl': 'csl',
+  '/mcl': 'mcl', '/tarmal': 'tarmal', '/csl': 'csl',
   '/mushroom': 'mushroom', '/admin': 'master', '/': 'master',
 };
 
