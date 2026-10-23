@@ -8,18 +8,20 @@ import { LoadingSpinner } from '@/components/Shared';
 
 // Existing pages
 import { Dashboard } from '@/pages/Dashboard';
-import { Trips } from '@/pages/Trips';
 import { SpareParts } from '@/pages/SpareParts';
 import { Users } from '@/pages/Users';
 
-// New placeholder pages
+// New sub-account pages
+import { SubAccountTrips } from '@/pages/SubAccountTrips';
+import { SubAccountTallies } from '@/pages/SubAccountTallies';
+
+// Placeholder pages
 import {
-  LiveMonitorPage, FuelPage, TalliesPage, ContainersPage, ReportsPage,
+  LiveMonitorPage, FuelPage, ContainersPage, ReportsPage,
   OverviewPage, CompliancePage, SubAccountViewPage,
 } from '@/pages/PlaceholderPages';
 
-import { portalFromPath, slugFromPath, PORTALS, SubAccount, TabId, MCLArea, portalLabel } from '@/lib/portals';
-import { useToast } from '@/components/Toast';
+import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea } from '@/lib/portals';
 
 function AppContent() {
   const { user, profile, loading, authError, retry } = useAuth();
@@ -97,9 +99,9 @@ function AppContent() {
     switch (activeTab) {
       case 'live-monitor': return <LiveMonitorPage color={portal.color} />;
       case 'dashboard': return <Dashboard />;
-      case 'trips': return <Trips />;
+      case 'trips': return <SubAccountTrips mclArea={mclArea} portalColor={portal.color} />;
       case 'fuel': return <FuelPage color={portal.color} />;
-      case 'tallies': return <TalliesPage color={portal.color} />;
+      case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
       case 'spare-parts': return <SpareParts />;
       case 'containers': return <ContainersPage color={portal.color} />;
       case 'reports': return <ReportsPage color={portal.color} />;
