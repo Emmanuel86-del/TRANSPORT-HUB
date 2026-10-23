@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component, ErrorInfo, ReactNode } from 'react';
 import { useAuth, AuthProvider } from '@/lib/auth';
 import { AuthPage } from '@/pages/AuthPage';
 import { ToastProvider } from '@/components/Toast';
@@ -29,14 +29,52 @@ import { LiveMonitor } from '@/pages/LiveMonitor';
 
 import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea } from '@/lib/portals';
 
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class PageErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('🚨 [Page Crash Caught]:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 rounded-2xl bg-red-50 border border-red-200 text-center max-w-lg mx-auto my-12 shadow-sm">
+          <h3 className="text-base font-bold text-red-800 mb-2">Unable to load this section</h3>
+          <p className="text-xs text-red-600 mb-4 font-mono bg-red-100/50 p-3 rounded-lg overflow-x-auto text-left">
+            {this.state.error?.message || 'An unexpected rendering error occurred.'}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-600 text-white text-xs font-semibold rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+          >
+            Reload Workspace
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AppContent() {
   const { user, profile, loading, authError, retry } = useAuth();
   
-  // Initialize activeTab directly from the current URL path to prevent resetting to dashboard/overview on re-renders
   const getInitialTab = (): TabId => {
     const segments = window.location.pathname.split('/').filter(Boolean);
-    const tabSlug = segments[1] as TabId;
-    return tabSlug || 'dashboard';
+    if (segments[0] === 'admin') {
+      return (segments[1] as TabId) || 'overview';
+    }
+    return (segments[1] as TabId) || 'dashboard';
   };
 
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
@@ -45,14 +83,12 @@ function AppContent() {
   const pathSlug = slugFromPath(window.location.pathname);
   const portal = pathSlug ? (portalFromPath(window.location.pathname) ?? PORTALS.master) : PORTALS.master;
 
-  // Redirect unknown paths to /admin
   useEffect(() => {
     if (!pathSlug) {
       window.location.replace('/admin');
     }
   }, [pathSlug]);
 
-  // Redirect root to /admin
   useEffect(() => {
     const path = window.location.pathname.replace(/\/+$/, '');
     if (path === '') {
@@ -60,7 +96,6 @@ function AppContent() {
     }
   }, []);
 
-  // Reset MCL area selection when portal changes or user signs out
   useEffect(() => {
     if (pathSlug !== 'mcl') {
       setMclArea(null);
@@ -85,7 +120,6 @@ function AppContent() {
     return <AuthPage portal={portal} />;
   }
 
-  // MCL: show area selection first
   if (pathSlug === 'mcl' && !mclArea) {
     return <MCLAreaSelection portal={portal} onAreaSelected={(area) => setMclArea(area)} />;
   }
@@ -93,11 +127,11 @@ function AppContent() {
   const isMaster = pathSlug === 'master';
 
   const renderTabContent = () => {
-    // Master portal tabs
     if (isMaster) {
       switch (activeTab) {
         case 'live-monitor': return <LiveMonitor color={portal.color} />;
         case 'overview': return <OverviewPage color={portal.color} />;
+        case 'dashboard': return <OverviewPage color={portal.color} />;
         case 'mcl': return <SubAccountViewPage color={PORTALS.mcl.color} name={PORTALS.mcl.fullName} />;
         case 'tarmal': return <SubAccountViewPage color={PORTALS.tarmal.color} name={PORTALS.tarmal.fullName} />;
         case 'csl': return <SubAccountViewPage color={PORTALS.csl.color} name={PORTALS.csl.fullName} />;
@@ -112,7 +146,6 @@ function AppContent() {
       }
     }
 
-    // Sub-account portal tabs
     switch (activeTab) {
       case 'live-monitor': return <LiveMonitor color={portal.color} subAccountFilter={portal.slug} />;
       case 'dashboard': return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
@@ -139,7 +172,9 @@ function AppContent() {
       onMCLAreaBack={() => setMclArea(null)}
       subAccountSwitcher={isMaster}
     >
-      {renderTabContent()}
+      <PageErrorBoundary>
+        {renderTabContent()}
+      </PageErrorBoundary>
     </WorkspaceShell>
   );
 }
