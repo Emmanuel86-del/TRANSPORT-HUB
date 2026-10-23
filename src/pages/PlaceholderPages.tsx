@@ -60,7 +60,6 @@ export function CompliancePage({ color }: { color: string }) {
 }
 
 export function SubAccountViewPage({ color, name }: { color: string; name: string }) {
-  // Map sub-account display name or route to its corresponding database key filter
   const lowerName = name.toLowerCase();
   let subAccountKey = 'all';
   if (lowerName.includes('mcl')) subAccountKey = 'mcl';
@@ -68,5 +67,6 @@ export function SubAccountViewPage({ color, name }: { color: string; name: strin
   else if (lowerName.includes('csl')) subAccountKey = 'csl';
   else if (lowerName.includes('mushroom')) subAccountKey = 'mushroom';
 
+  // Directly render the LiveMonitor scoped to this sub-account
   return <LiveMonitor color={color} subAccountFilter={subAccountKey} />;
 }
