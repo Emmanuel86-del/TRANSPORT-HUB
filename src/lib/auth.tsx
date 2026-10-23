@@ -33,11 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase
+      const profilePromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
+
+      const { data, error } = (await Promise.race([
+        profilePromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Profile timeout')), 3000)),
+      ])) as any;
 
       if (error) {
         console.error('Error fetching profile:', error);
@@ -54,13 +59,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setAuthError(null);
 
-    // Safety fallback timer to prevent infinite loading if Supabase stalls
     const safetyTimer = setTimeout(() => {
       setLoading(false);
     }, 4000);
 
     try {
-      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+      const sessionPromise = supabase.auth.getSession();
+      const res = (await Promise.race([
+        sessionPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Session timeout')), 3500)),
+      ])) as any;
+
+      const { data: { session: currentSession }, error: sessionError } = res;
 
       if (sessionError) {
         setAuthError(sessionError.message);
@@ -118,7 +128,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     setAuthError(null);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const signInPromise = supabase.auth.signInWithPassword({ email, password });
+      const res = (await Promise.race([
+        signInPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Sign in timeout')), 5000)),
+      ])) as any;
+
+      const { data, error } = res;
       if (error) return { error: error.message };
 
       if (data.user) {
@@ -135,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return { error: null };
     } catch (err: any) {
-      return { error: err.message || 'Failed to sign in' };
+      return { error: err.message || 'Failed to sign in. Please check your connection.' };
     }
   };
 
