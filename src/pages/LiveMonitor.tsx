@@ -1,26 +1,22 @@
-import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react';
+import { useState, useEffect, useCallback, useMemo, Fragment } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { Trip, Vehicle, Driver, WorkRecord } from '@/types';
 import { RefreshCw, XCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-declare global {
-  interface Window { L: any; }
-}
-
 const MONITOR_COLORS = {
-  bg: '#120505',          // Deep maroon dark background matching app theme
-  card: '#1F0B0B',        // Rich maroon card background
-  accent: '#FFB703',      // Warm amber/gold accent
-  active: '#2A9D8F',      // Active status green/teal
-  parkedLate: '#F4A261',  // Warning orange
-  workshop: '#E76F51',    // Workshop rust orange
-  offline: '#D90429',     // Crimson red for offline/alerts
-  inProgress: '#457B9D',  // Muted blue for in-progress
-  border: '#3A1414',      // Deep maroon border
-  textDim: '#A89F9F',     // Soft muted text
-  rowAlt: '#180707',      // Alternate row maroon
+  bg: '#120505',
+  card: '#1F0B0B',
+  accent: '#FFB703',
+  active: '#2A9D8F',
+  parkedLate: '#F4A261',
+  workshop: '#E76F51',
+  offline: '#D90429',
+  inProgress: '#457B9D',
+  border: '#3A1414',
+  textDim: '#A89F9F',
+  rowAlt: '#180707',
 };
 
 const SUB_ACCOUNT_OPTIONS: { value: string; label: string }[] = [
@@ -32,12 +28,10 @@ const SUB_ACCOUNT_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const GEOFENCES = [
-  { name: 'MCL / Mikindani', color: '#FFEB3B', coords: [[-3.9670, 39.7330], [-3.9670, 39.7600], [-3.9500, 39.7600], [-3.9500, 39.7330]] },
-  { name: 'Ngamani New', color: '#4CAF50', coords: [[-3.9800, 39.7500], [-3.9800, 39.7800], [-3.9650, 39.7800], [-3.9650, 39.7500]] },
-  { name: 'Workshop', color: '#FF9800', coords: [[-3.9550, 39.7450], [-3.9550, 39.7620], [-3.9420, 39.7620], [-3.9420, 39.7450]] },
+  { name: 'MCL / Mikindani', color: '#FFEB3B', x: 20, y: 30, w: 25, h: 25 },
+  { name: 'Ngamani New', color: '#4CAF50', x: 55, y: 20, w: 30, h: 30 },
+  { name: 'Workshop', color: '#FF9800', x: 35, y: 65, w: 25, h: 25 },
 ];
-
-const MOMBASA_CENTER: [number, number] = [-3.9630, 39.7500];
 
 type TripWithRelations = Trip & { vehicle?: Vehicle | null; driver?: Driver | null };
 type WorkRecordWithVehicle = WorkRecord & { vehicle?: Vehicle | null };
@@ -93,16 +87,11 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [activeCard, setActiveCard] = useState<CardKey | null>(null);
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<TripWithRelations | null>(null);
-  const [mapToggle, setMapToggle] = useState<'satellite' | 'map'>('map');
-  const mapRef = useRef<any>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
-  const layersRef = useRef<any[]>([]);
+  const [mapMode, setMapMode] = useState<'radar' | 'grid'>('radar');
 
   const isMaster = profile?.sub_account === 'master' || profile?.sub_account === null;
   const effectiveFilter = forcedFilter ?? (isMaster ? subFilter : profile?.sub_account ?? 'all');
 
-  // Clock ticker
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(new Date());
@@ -146,7 +135,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Build unit statuses
   const unitStatuses: UnitStatus[] = useMemo(() => {
     return vehicles.map(vehicle => {
       const vTrips = trips.filter(t => t.vehicle_id === vehicle.id);
@@ -157,37 +145,31 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
       const badges: { label: string; color: string; sublabel?: string }[] = [];
 
-      // Inside MCL
       const mclTrip = inProgressTrips.find(t => (t.destination || t.to_location || '').includes('MCL'));
       if (mclTrip) {
         const since = parseTimeToMinutes(mclTrip.arrival_time || mclTrip.departure_time);
         badges.push({ label: 'INSIDE MCL', color: MONITOR_COLORS.active, sublabel: since ? `since ${minutesToHHMM(since)}` : undefined });
       }
 
-      // Towards MCL
       const towardsMcl = inProgressTrips.find(t => (t.destination || t.to_location || '').includes('MCL') && !mclTrip);
       if (towardsMcl && !mclTrip) {
         badges.push({ label: 'TOWARDS MCL', color: MONITOR_COLORS.inProgress });
       }
 
-      // Inside Ngamani
       const ngamaniTrip = inProgressTrips.find(t => (t.destination || t.to_location || '').toLowerCase().includes('ngamani'));
       if (ngamaniTrip) {
         badges.push({ label: 'INSIDE NGAMANI', color: MONITOR_COLORS.active });
       }
 
-      // Towards Ngamani
       const towardsNgamani = inProgressTrips.find(t => (t.destination || t.to_location || '').toLowerCase().includes('ngamani') && !ngamaniTrip);
       if (towardsNgamani && !ngamaniTrip) {
         badges.push({ label: 'TOWARDS NGAMANI', color: MONITOR_COLORS.inProgress });
       }
 
-      // Workshop
       if (activeWork) {
         badges.push({ label: 'INSIDE WORKSHOP', color: MONITOR_COLORS.workshop });
       }
 
-      // Trip durations
       const tripTimes = completedTrips.map(t => {
         const dep = parseTimeToMinutes(t.departure_time);
         const arr = parseTimeToMinutes(t.arrival_time);
@@ -196,11 +178,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       }).filter((t): t is number => t !== null);
       const avgTrip = tripTimes.length > 0 ? tripTimes.reduce((a, b) => a + b, 0) / tripTimes.length : null;
 
-      // Last activity
       const allTimes = vTrips.flatMap(t => [t.departure_time, t.arrival_time]).filter(Boolean).sort().reverse();
       const lastActivity = allTimes[0] || null;
 
-      // Parked Late: no trips today, last activity before 06:00
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
       if (vTrips.length === 0 && !activeWork) {
         const lastActMin = parseTimeToMinutes(lastActivity);
@@ -209,7 +189,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         }
       }
 
-      // Stopped outside: in-progress, (now - departure) > 120 min, no arrival
       const stoppedTrip = inProgressTrips.find(t => {
         const dep = parseTimeToMinutes(t.departure_time);
         if (!dep) return false;
@@ -221,7 +200,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         badges.push({ label: `NO SIGNAL ${formatDuration(nowMinutes - dep)}`, color: MONITOR_COLORS.offline });
       }
 
-      // Offline: zero trips today and not in workshop
       if (vTrips.length === 0 && !activeWork && !badges.find(b => b.label.includes('PARKED'))) {
         badges.push({ label: 'NO SIGNAL', color: MONITOR_COLORS.offline });
       }
@@ -242,7 +220,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
   }, [vehicles, trips, workRecords, now]);
 
-  // Summary cards data
   const cards = useMemo(() => {
     const completedToday = trips.filter(t => t.status === 'completed');
     const inProgress = trips.filter(t => t.status === 'in_progress' || t.status === 'started');
@@ -285,7 +262,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     ];
   }, [trips, vehicles, workRecords, now]);
 
-  // Filtered unit board based on active card
   const filteredUnits = useMemo(() => {
     if (!activeCard) return unitStatuses;
     return unitStatuses.filter(u => {
@@ -301,14 +277,12 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
   }, [unitStatuses, activeCard]);
 
-  // Trip log data
   const tripLog = useMemo(() => {
     const completed = trips.filter(t => t.status === 'completed').sort((a, b) => (b.arrival_time || '').localeCompare(a.arrival_time || ''));
     const inProg = trips.filter(t => t.status === 'in_progress' || t.status === 'started');
     return { completed, inProgress: inProg };
   }, [trips]);
 
-  // Trips by hour chart data
   const tripsByHour = useMemo(() => {
     const hours = Array.from({ length: 24 }, (_, h) => ({ hour: h, label: `${String(h).padStart(2, '0')}:00`, trips: 0 }));
     trips.filter(t => t.status === 'completed').forEach(t => {
@@ -323,7 +297,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
   const currentHour = now.getHours();
 
-  // Stopped outside data
   const stoppedOutsideTrips = useMemo(() => {
     const nowMin = now.getHours() * 60 + now.getMinutes();
     return trips.filter(t => {
@@ -340,146 +313,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       plate: t.vehicle?.plate_number || '—',
     }));
   }, [trips, now]);
-
-  // Map initialization with safe retry for CDN script loading
-  useEffect(() => {
-    let timer: any;
-    let isMounted = true;
-
-    const initMap = () => {
-      if (!mapRef.current || !isMounted) return;
-      
-      // Wait for Leaflet CDN script to load if not ready yet
-      if (!window.L) {
-        timer = setTimeout(initMap, 100);
-        return;
-      }
-      
-      if (mapInstanceRef.current) return;
-
-      mapInstanceRef.current = window.L.map(mapRef.current, {
-        center: MOMBASA_CENTER,
-        zoom: 14,
-        zoomControl: true,
-      });
-
-      updateMapTiles();
-      drawGeofences();
-
-      // Recalculate size after render
-      setTimeout(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      }, 250);
-    };
-
-    initMap();
-
-    return () => {
-      isMounted = false;
-      if (timer) clearTimeout(timer);
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []);
-
-  const updateMapTiles = () => {
-    if (!mapInstanceRef.current || !window.L) return;
-    layersRef.current.forEach(l => mapInstanceRef.current.removeLayer(l));
-    layersRef.current = [];
-
-    const tileUrl = mapToggle === 'satellite'
-      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-    const tileLayer = window.L.tileLayer(tileUrl, {
-      attribution: mapToggle === 'satellite' ? 'Esri' : 'OpenStreetMap',
-      maxZoom: 19,
-    });
-    tileLayer.addTo(mapInstanceRef.current);
-    layersRef.current.push(tileLayer);
-
-    drawGeofences();
-    drawMarkers();
-  };
-
-  const drawGeofences = () => {
-    if (!mapInstanceRef.current || !window.L) return;
-    GEOFENCES.forEach(gf => {
-      const polygon = window.L.polygon(gf.coords, {
-        color: gf.color,
-        weight: 2,
-        dashArray: '8 4',
-        fillOpacity: 0.05,
-      });
-      polygon.bindTooltip(gf.name, { permanent: false });
-      polygon.addTo(mapInstanceRef.current);
-      layersRef.current.push(polygon);
-    });
-  };
-
-  const drawMarkers = () => {
-    if (!mapInstanceRef.current || !window.L) return;
-    markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m));
-    markersRef.current = [];
-
-    unitStatuses.forEach(u => {
-      const isOverdue = u.badges.some(b => b.color === MONITOR_COLORS.offline && b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
-      const isWorkshop = u.badges.some(b => b.label === 'INSIDE WORKSHOP');
-      const isParked = u.badges.some(b => b.label.includes('PARKED'));
-
-      let markerColor = MONITOR_COLORS.active;
-      if (isOverdue) markerColor = MONITOR_COLORS.offline;
-      else if (isWorkshop || isParked) markerColor = MONITOR_COLORS.workshop;
-
-      const seed = u.vehicle.plate_number.charCodeAt(0) || 65;
-      const lat = MOMBASA_CENTER[0] + ((seed % 10) - 5) * 0.005;
-      const lng = MOMBASA_CENTER[1] + ((seed % 7) - 3) * 0.005;
-
-      const marker = window.L.circleMarker([lat, lng], {
-        radius: 8,
-        color: markerColor,
-        fillColor: markerColor,
-        fillOpacity: 0.8,
-        weight: 2,
-      });
-      marker.bindPopup(`<b>${u.vehicle.plate_number}</b><br>Driver: ${u.currentDriver?.name || '—'}<br>Status: ${u.badges.map(b => b.label).join(', ') || 'Idle'}<br>Last trip: ${u.lastActivity || '—'}`);
-      marker.addTo(mapInstanceRef.current);
-      markersRef.current.push(marker);
-    });
-
-    trips.filter(t => t.status === 'completed').forEach(t => {
-      if (t.departure_time && t.arrival_time) {
-        const seed = (t.vehicle?.plate_number || 'X').charCodeAt(0) || 65;
-        const lat1 = MOMBASA_CENTER[0] + ((seed % 10) - 5) * 0.005;
-        const lng1 = MOMBASA_CENTER[1] + ((seed % 7) - 3) * 0.005;
-        const lat2 = lat1 + 0.003;
-        const lng2 = lng1 + 0.003;
-        const line = window.L.polyline([[lat1, lng1], [lat2, lng2]], {
-          color: MONITOR_COLORS.accent,
-          weight: 2,
-          dashArray: '6 4',
-          opacity: 0.6,
-        });
-        line.addTo(mapInstanceRef.current);
-        layersRef.current.push(line);
-      }
-    });
-  };
-
-  useEffect(() => {
-    if (mapInstanceRef.current) {
-      updateMapTiles();
-    }
-  }, [mapToggle]);
-
-  useEffect(() => {
-    if (mapInstanceRef.current && !loading) {
-      drawMarkers();
-    }
-  }, [unitStatuses, loading]);
 
   const stale = isStale(lastUpdate, now);
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -503,10 +336,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
           ))}
         </div>
         <div className="animate-pulse h-64 rounded-xl" style={{ background: MONITOR_COLORS.card }} />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="animate-pulse h-64 rounded-xl" style={{ background: MONITOR_COLORS.card }} />
-          <div className="animate-pulse h-64 rounded-xl" style={{ background: MONITOR_COLORS.card }} />
-        </div>
       </div>
     );
   }
@@ -794,26 +623,85 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
           </div>
         </div>
 
-        {/* SECTION 7: LIVE MAP */}
+        {/* SECTION 7: INTERACTIVE CUSTOM SVG FLEET MAP */}
         <div style={panelStyle} className="lg:col-span-2 shadow-sm">
           <div className="flex items-center justify-between" style={headerStyle}>
-            <span>LIVE MAP · {unitStatuses.length} UNITS ON MAP</span>
-            <button
-              onClick={() => setMapToggle(prev => prev === 'map' ? 'satellite' : 'map')}
-              className="rounded-lg px-2 py-1 text-xs font-bold transition-colors"
-              style={{ background: MONITOR_COLORS.bg, color: MONITOR_COLORS.accent, border: `1px solid ${MONITOR_COLORS.border}` }}
-            >
-              {mapToggle === 'map' ? 'SATELLITE' : 'MAP'}
-            </button>
+            <span>MOMBASA LIVE FLEET MAP · {unitStatuses.length} UNITS TRACKED</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setMapMode(prev => prev === 'radar' ? 'grid' : 'radar')}
+                className="rounded-lg px-2.5 py-1 text-xs font-bold transition-colors"
+                style={{ background: MONITOR_COLORS.bg, color: MONITOR_COLORS.accent, border: `1px solid ${MONITOR_COLORS.border}` }}
+              >
+                MODE: {mapMode.toUpperCase()}
+              </button>
+            </div>
           </div>
-          <div ref={mapRef} style={{ height: '400px', width: '100%', background: MONITOR_COLORS.bg }} />
+          
+          <div className="relative w-full h-[400px] overflow-hidden bg-[#180707] flex items-center justify-center">
+            {/* SVG Grid / Radar background */}
+            <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#3A1414" strokeWidth="1" opacity="0.6" />
+                </pattern>
+                <radialGradient id="radar-glow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#FFB703" stopOpacity="0.15" />
+                  <stop offset="100%" stopColor="#120505" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
+              {mapMode === 'radar' && <circle cx="50%" cy="50%" r="180" fill="url(#radar-glow)" />}
+
+              {/* Geofence zones */}
+              {GEOFENCES.map((gf, idx) => (
+                <g key={idx}>
+                  <rect x={`${gf.x}%`} y={`${gf.y}%`} width={`${gf.w}%`} height={`${gf.h}%`} rx="8" fill={gf.color} fillOpacity="0.08" stroke={gf.color} strokeWidth="1.5" strokeDasharray="6 3" />
+                  <text x={`${gf.x + 2}%`} y={`${gf.y + 7}%`} fill={gf.color} fontSize="11" fontWeight="bold" fontFamily="monospace">
+                    {gf.name}
+                  </text>
+                </g>
+              ))}
+
+              {/* Plotted Units */}
+              {unitStatuses.map((u, idx) => {
+                const isOverdue = u.badges.some(b => b.color === MONITOR_COLORS.offline && b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
+                const isWorkshop = u.badges.some(b => b.label === 'INSIDE WORKSHOP');
+                const isParked = u.badges.some(b => b.label.includes('PARKED'));
+
+                let markerColor = MONITOR_COLORS.active;
+                if (isOverdue) markerColor = MONITOR_COLORS.offline;
+                else if (isWorkshop || isParked) markerColor = MONITOR_COLORS.workshop;
+
+                // Scatter points across the map based on plate hash
+                const seed = u.vehicle.plate_number.charCodeAt(0) || 65;
+                const px = 15 + ((seed * 17) % 70);
+                const py = 20 + ((seed * 23) % 60);
+
+                return (
+                  <g key={u.vehicle.id} className="cursor-pointer group" onClick={() => setExpandedUnit(u.vehicle.id)}>
+                    <circle cx={`${px}%`} cy={`${py}%`} r="14" fill={markerColor} fillOpacity="0.2" className="animate-ping" />
+                    <circle cx={`${px}%`} cy={`${py}%`} r="7" fill={markerColor} stroke="#fff" strokeWidth="1.5" />
+                    <text x={`${px}%`} y={`${py - 3}%`} textAnchor="middle" fill="#fff" fontSize="10" fontWeight="bold" fontFamily="monospace" className="drop-shadow">
+                      {u.vehicle.plate_number}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+
+            {/* Overlay instructions */}
+            <div className="absolute bottom-3 left-3 bg-[#1F0B0B]/90 border border-[#3A1414] rounded-lg px-3 py-1.5 text-[11px] text-[#A89F9F]">
+              💡 Click any unit in the Unit Board above for full trip telemetry.
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-4 px-4 py-2 text-xs" style={{ borderTop: `1px solid ${MONITOR_COLORS.border}` }}>
             {[
-              { label: 'GEOFENCE', color: '#FFEB3B' },
-              { label: 'UNIT NOW', color: MONITOR_COLORS.active },
-              { label: 'OVERDUE', color: MONITOR_COLORS.offline },
-              { label: 'COMPLETED TRIP', color: MONITOR_COLORS.accent },
-              { label: 'WORKSHOP', color: MONITOR_COLORS.workshop },
+              { label: 'GEOFENCE ZONE', color: '#FFEB3B' },
+              { label: 'ACTIVE UNIT', color: MONITOR_COLORS.active },
+              { label: 'OVERDUE / OFFLINE', color: MONITOR_COLORS.offline },
+              { label: 'WORKSHOP / PARKED', color: MONITOR_COLORS.workshop },
             ].map(item => (
               <div key={item.label} className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-full" style={{ background: item.color }} />
