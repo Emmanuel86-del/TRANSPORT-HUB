@@ -3,7 +3,9 @@ import { Route as RouteIcon, Plus, Edit, Filter } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
+import { DocumentUpload } from '@/components/DocumentUpload';
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
+import { useToast } from '@/components/Toast';
 
 interface Trip {
   id: string;
@@ -20,6 +22,7 @@ interface Trip {
 }
 
 export function Trips() {
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
@@ -45,6 +48,7 @@ export function Trips() {
   };
 
   const [form, setForm] = useState(emptyForm);
+  const [tripDocs, setTripDocs] = useState<string[]>([]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -89,7 +93,7 @@ export function Trips() {
         title="Trips & Dispatches" 
         subtitle="Manage active and historical vehicle trips, routes, and cargo allocations" 
         icon={<RouteIcon className="h-6 w-6" />} 
-        onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
+        onAdd={() => { setForm(emptyForm); setEditId(null); setTripDocs([]); setModalOpen(true); }} 
         addLabel="Create New Trip" 
       />
 
@@ -188,6 +192,7 @@ export function Trips() {
                         const { id, vehicle, driver, ...rest } = t as any;
                         setForm(rest);
                         setEditId(id);
+                        setTripDocs([]);
                         setModalOpen(true);
                       }} 
                       className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
@@ -256,6 +261,13 @@ export function Trips() {
             <input type="date" className="input" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} />
           </div>
         </div>
+
+        <DocumentUpload
+          folder="trips"
+          recordId={editId || 'unsaved'}
+          existingDocs={tripDocs}
+          onDocsChange={setTripDocs}
+        />
 
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
