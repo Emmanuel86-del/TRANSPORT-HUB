@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/Toast';
 import { WorkspaceShell } from '@/components/WorkspaceShell';
 import { MCLAreaSelection } from '@/components/MCLAreaSelection';
 import { LoadingSpinner } from '@/components/Shared';
+import { setSubAccountFilter } from '@/lib/supabase';
 
 // Existing pages
 import { Dashboard } from '@/pages/Dashboard';
@@ -62,6 +63,17 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundary
     }
     return this.props.children;
   }
+}
+
+function SubAccountDashboardWrapper({ subAccount, mclArea, onViewAllContainers, onViewCompliance }: { subAccount: SubAccount; mclArea: MCLArea | null; onViewAllContainers: () => void; onViewCompliance: () => void }) {
+  useEffect(() => {
+    setSubAccountFilter(subAccount);
+    return () => {
+      setSubAccountFilter('master');
+    };
+  }, [subAccount]);
+
+  return <Dashboard mclArea={mclArea} onViewAllContainers={onViewAllContainers} onViewCompliance={onViewCompliance} />;
 }
 
 function AppContent() {
@@ -131,15 +143,15 @@ function AppContent() {
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'dashboard': return <OverviewPage color={portal.color} />;
         
-        // Show the actual Dashboard summary for each sub-account tab
+        // Dynamically set sub-account filter for each tab
         case 'mcl': 
-          return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper subAccount="mcl" mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'tarmal': 
-          return <Dashboard subAccountOverride="tarmal" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper subAccount="tarmal" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'csl': 
-          return <Dashboard subAccountOverride="csl" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper subAccount="csl" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'mushroom': 
-          return <Dashboard subAccountOverride="mushroom" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper subAccount="mushroom" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         
         case 'users': return <Users />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
