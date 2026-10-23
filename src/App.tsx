@@ -78,7 +78,7 @@ function AppContent() {
     return <MCLAreaSelection portal={portal} onAreaSelected={(area) => setMclArea(area)} />;
   }
 
-  const isMaster = pathSlug === 'master';
+  const isMaster = pathSlug === 'admin';
 
   const renderTabContent = () => {
     // Master portal tabs
