@@ -19,10 +19,8 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
-const TIMEOUT_MS = 8000;
-
-function getCurrentSlug(): SubAccount | null {
-  return slugFromPath(window.location.pathname);
+function getCurrentSlug(): SubAccount {
+  return slugFromPath(window.location.pathname) ?? 'master';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -31,191 +29,176 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [subAccount, setSubAccount] = useState<SubAccount | null>(getCurrentSlug());
-  const loadingResolved = useRef(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialized = useRef(false);
 
-  const finishLoading = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return null;
+      }
+      return data as Profile;
+    } catch (err) {
+      console.error('Failed to load profile:', err);
+      return null;
     }
-    loadingResolved.current = true;
-    setLoading(false);
   }, []);
 
-  const startLoadingWithTimeout = useCallback(() => {
-    loadingResolved.current = false;
+  const initAuth = useCallback(async () => {
     setLoading(true);
     setAuthError(null);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      if (!loadingResolved.current) {
-        console.error('[Auth Error] Timeout: session/profile fetch exceeded 8 seconds');
-        setAuthError('Taking longer than expected — please refresh and try again');
-        setLoading(false);
-      }
-    }, TIMEOUT_MS);
-  }, []);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      console.error('[Auth Error] Profile fetch failed:', error.code, error.message, error.details);
-    }
-    setProfile(data as Profile | null);
-    return data as Profile | null;
-  }, []);
-
-  const validateAndEnforcePortal = useCallback(async (fetchedProfile: Profile | null): Promise<string | null> => {
-    if (!fetchedProfile) return null;
-    const portalSlug = getCurrentSlug();
-    if (!portalSlug) return null;
-
-    const userSubAccount = fetchedProfile.sub_account || 'master';
-
-    if (portalSlug === 'master') {
-      if (userSubAccount !== 'master') {
-        await supabase.auth.signOut();
-        setProfile(null);
-        const correctPath = pathForSlug(userSubAccount as SubAccount);
-        return `This account belongs to ${portalLabel(userSubAccount)}. Log in at ${correctPath}`;
-      }
-      return null;
-    }
-
-    if (userSubAccount === 'master') {
-      window.location.replace('/admin');
-      return null;
-    }
-
-    if (userSubAccount !== portalSlug) {
-      await supabase.auth.signOut();
-      setProfile(null);
-      const correctPath = pathForSlug(userSubAccount as SubAccount);
-      return `This account belongs to ${portalLabel(userSubAccount)}. Log in at ${correctPath}`;
-    }
-
-    return null;
-  }, []);
-
-  const initialize = useCallback(async () => {
-    startLoadingWithTimeout();
-    const slug = getCurrentSlug();
-    setSubAccount(slug);
-    setSubAccountFilter(slug);
     try {
-      const { data: { session: existingSession }, error: sessionError } = await supabase.auth.getSession();
+      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+
       if (sessionError) {
-        console.error('[Auth Error] getSession failed:', sessionError.code, sessionError.message);
-        setAuthError('Failed to load session. Please try again.');
-        finishLoading();
+        setAuthError(sessionError.message);
+        setLoading(false);
         return;
       }
-      setSession(existingSession);
-      setUser(existingSession?.user ?? null);
-      if (existingSession?.user) {
-        const fetchedProfile = await fetchProfile(existingSession.user.id);
-        const portalError = await validateAndEnforcePortal(fetchedProfile);
-        if (portalError) {
-          setAuthError(portalError);
-        } else if (fetchedProfile) {
-          setSubAccountFilter(fetchedProfile.sub_account as SubAccount);
+
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+
+      if (currentSession?.user) {
+        const userProfile = await fetchProfile(currentSession.user.id);
+        setProfile(userProfile);
+
+        if (userProfile?.sub_account) {
+          setSubAccountFilter(userProfile.sub_account);
         }
       }
-      finishLoading();
     } catch (err) {
-      console.error('[Auth Error] Initialization exception:', err);
-      setAuthError('Connection error — please check your network and try again.');
-      finishLoading();
+      setAuthError('Connection error. Please try again.');
+    } finally {
+      setLoading(false);
     }
-  }, [fetchProfile, finishLoading, startLoadingWithTimeout, validateAndEnforcePortal]);
-
-  useEffect(() => {
-    initialize();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-      if (newSession?.user) {
-        (async () => {
-          startLoadingWithTimeout();
-          const fetchedProfile = await fetchProfile(newSession.user.id);
-          const portalError = await validateAndEnforcePortal(fetchedProfile);
-          if (portalError) {
-            setAuthError(portalError);
-          } else if (fetchedProfile) {
-            setSubAccountFilter(fetchedProfile.sub_account as SubAccount);
-          }
-          finishLoading();
-        })();
-      } else {
-        setProfile(null);
-        setSubAccountFilter(getCurrentSlug());
-        finishLoading();
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    };
-  }, [initialize, fetchProfile, startLoadingWithTimeout, finishLoading, validateAndEnforcePortal]);
-
-  const signIn = useCallback(async (email: string, password: string) => {
-    setAuthError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      console.error('[Auth Error] Sign in failed:', error.code, error.message);
-      return { error: error.message };
-    }
-    return { error: null };
-  }, []);
-
-  const signUp = useCallback(async (email: string, password: string, fullName: string, sub: SubAccount) => {
-    setAuthError(null);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, role: 'employee', sub_account: sub },
-      },
-    });
-    if (error) {
-      console.error('[Auth Error] Sign up failed:', error.code, error.message);
-      return { error: error.message };
-    }
-    if (data.user) {
-      await fetchProfile(data.user.id);
-    }
-    return { error: null };
   }, [fetchProfile]);
 
-  const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
-    setAuthError(null);
-    setSubAccountFilter(getCurrentSlug());
-  }, []);
+  useEffect(() => {
+    if (!initialized.current) {
+      initialized.current = true;
+      initAuth();
+    }
 
-  const retry = useCallback(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+
+      if (newSession?.user) {
+        const userProfile = await fetchProfile(newSession.user.id);
+        setProfile(userProfile);
+        if (userProfile?.sub_account) {
+          setSubAccountFilter(userProfile.sub_account);
+        }
+      } else {
+        setProfile(null);
+        setSubAccountFilter(null);
+      }
+
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [fetchProfile, initAuth]);
+
+  const signIn = async (email: string, password: string) => {
     setAuthError(null);
-    initialize();
-  }, [initialize]);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
+
+      if (data.user) {
+        const userProfile = await fetchProfile(data.user.id);
+        setProfile(userProfile);
+
+        const currentSlug = getCurrentSlug();
+        const userSubAccount = userProfile?.sub_account ?? 'master';
+
+        if (userSubAccount !== 'master' && currentSlug !== userSubAccount) {
+          window.location.replace(pathForSlug(userSubAccount));
+        }
+      }
+
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || 'Failed to sign in' };
+    }
+  };
+
+  const signUp = async (email: string, password: string, fullName: string, subAccount: SubAccount) => {
+    setAuthError(null);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            sub_account: subAccount,
+          },
+        },
+      });
+
+      if (error) return { error: error.message };
+
+      if (data.user) {
+        await supabase.from('profiles').insert([
+          {
+            id: data.user.id,
+            email,
+            full_name: fullName,
+            sub_account: subAccount,
+            role: 'employee',
+          },
+        ]);
+      }
+
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message || 'Failed to sign up' };
+    }
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setSubAccountFilter(null);
+    window.location.replace('/admin');
+  };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, authError, subAccount, signIn, signUp, signOut, retry }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user,
+        profile,
+        loading,
+        authError,
+        subAccount: (profile?.sub_account as SubAccount) ?? null,
+        signIn,
+        signUp,
+        signOut,
+        retry: initAuth,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }
