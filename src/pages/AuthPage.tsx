@@ -1,196 +1,170 @@
 import { useState } from 'react';
-import { Truck as TruckIcon, Mail, Lock, User, Eye, EyeOff, AlertCircle, RefreshCw, UserCog } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { PortalConfig } from '@/lib/portals';
+import { PortalConfig, SubAccount, PORTALS, pathForSlug } from '@/lib/portals';
+import { Truck, Lock, Mail, User, ArrowRight, AlertCircle } from 'lucide-react';
 
 export function AuthPage({ portal }: { portal: PortalConfig }) {
-  const { signIn, signUp, authError, retry, loading: authLoading } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const { signIn, signUp, authError } = useAuth();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState(portal.slug === 'master' ? 'adminashok@gmail.com' : `${portal.slug}ashok@gmail.com`);
+  const [password, setPassword] = useState(portal.slug === 'master' ? 'admin@2026' : `${portal.slug}@2026`);
   const [fullName, setFullName] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [subAccount, setSubAccount] = useState<SubAccount>(portal.slug === 'master' ? 'mcl' : portal.slug);
   const [loading, setLoading] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
+    setLocalError(null);
 
-    if (mode === 'signin') {
-      const { error } = await signIn(email, password);
-      if (error) {
-        setError(error);
-        setLoading(false);
+    try {
+      if (isSignUp) {
+        const { error } = await signUp(email, password, fullName, subAccount);
+        if (error) {
+          setLocalError(error);
+          setLoading(false);
+        } else {
+          // Switch to sign in after successful signup
+          setIsSignUp(false);
+          setLoading(false);
+        }
+      } else {
+        const { error } = await signIn(email, password);
+        if (error) {
+          setLocalError(error);
+          setLoading(false);
+        }
+        // If successful, auth state change / redirect will occur
       }
-    } else {
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters');
-        setLoading(false);
-        return;
-      }
-      if (!fullName.trim()) {
-        setError('Please enter your full name');
-        setLoading(false);
-        return;
-      }
-      const { error } = await signUp(email, password, fullName, portal.slug);
-      if (error) {
-        setError(error);
-        setLoading(false);
-      }
+    } catch (err: any) {
+      setLocalError(err.message || 'An unexpected error occurred');
+      setLoading(false);
     }
   };
 
-  const displayedError = error || authError;
-
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: `linear-gradient(135deg, ${portal.colorDark}, ${portal.color})` }}>
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-white/5 blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
-        {/* Portal Header */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-lg mb-3" style={{ boxShadow: `0 8px 24px ${portal.color}40` }}>
-            <TruckIcon className="h-7 w-7" style={{ color: portal.color }} />
+    <div 
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: `linear-gradient(135deg, ${portal.colorDark}, ${portal.color})` }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
+        <div className="p-8 text-center" style={{ background: portal.color }}>
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg mb-3 text-slate-900">
+            <Truck className="h-8 w-8" style={{ color: portal.color }} />
           </div>
-          <h1 className="text-2xl font-bold text-white">{portal.fullName}</h1>
-          <p className="text-sm text-white/70 mt-1">Fleet Management System</p>
+          <h1 className="text-xl font-bold text-white">{portal.fullName}</h1>
+          <p className="text-xs text-white/80 mt-1">Fleet Management System</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
-          <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-6">
+        <div className="p-8 space-y-6">
+          <div className="flex rounded-xl bg-slate-100 p-1">
             <button
-              onClick={() => { setMode('signin'); setError(null); }}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${mode === 'signin' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              type="button"
+              onClick={() => { setIsSignUp(false); setLocalError(null); }}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                !isSignUp ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}
             >
               Sign In
             </button>
             <button
-              onClick={() => { setMode('signup'); setError(null); }}
-              className={`flex-1 rounded-lg py-2.5 text-sm font-medium transition-all ${mode === 'signup' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              type="button"
+              onClick={() => { setIsSignUp(true); setLocalError(null); }}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                isSignUp ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'
+              }`}
             >
               Create Account
             </button>
           </div>
 
-          {displayedError && (
-            <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-sm text-red-600">{displayedError}</p>
-                  {authError && !error && (
-                    <button
-                      onClick={() => retry()}
-                      disabled={authLoading}
-                      className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-red-700 hover:text-red-800"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${authLoading ? 'animate-spin' : ''}`} />
-                      Retry
-                    </button>
-                  )}
-                </div>
-              </div>
+          {(localError || authError) && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 text-red-700 text-xs border border-red-200">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{localError || authError}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && (
+            {isSignUp && (
               <div>
-                <label className="label">Full Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <input
                     type="text"
-                    className="input pl-9"
-                    placeholder="John Doe"
+                    required
                     value={fullName}
                     onChange={e => setFullName(e.target.value)}
+                    placeholder="John Doe"
+                    className="input pl-9 text-sm"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="label">Email</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <input
                   type="email"
-                  className="input pl-9"
-                  placeholder="you@company.com"
+                  required
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  required
+                  placeholder="name@company.com"
+                  className="input pl-9 text-sm"
                 />
               </div>
             </div>
 
             <div>
-              <label className="label">Password</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <input
-                  type={showPassword ? 'text' : 'password'}
-                  className="input pl-9 pr-9"
-                  placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                  type="password"
+                  required
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  required
+                  placeholder="••••••••"
+                  className="input pl-9 text-sm"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
               </div>
             </div>
 
-            {mode === 'signup' && (
-              <div className="flex items-center gap-3 rounded-xl border-2 p-3" style={{ borderColor: `${portal.color}20`, background: `${portal.color}08` }}>
-                <div className="shrink-0" style={{ color: portal.color }}>
-                  <UserCog className="h-6 w-6" />
-                </div>
-                <div className="flex-1">
-                  <span className="text-sm font-medium text-slate-700 block">Employee Account — {portal.name}</span>
-                  <span className="text-xs text-slate-500">All new accounts start as Employee. An admin can promote you after sign-up.</span>
-                </div>
+            {isSignUp && portal.slug === 'master' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Sub-Account Assignment</label>
+                <select
+                  value={subAccount}
+                  onChange={e => setSubAccount(e.target.value as SubAccount)}
+                  className="input text-sm"
+                >
+                  {(['mcl', 'tarmal', 'csl', 'mushroom'] as SubAccount[]).map(sa => (
+                    <option key={sa} value={sa}>{PORTALS[sa].fullName}</option>
+                  ))}
+                </select>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 rounded-lg text-white font-medium shadow-sm transition-all hover:opacity-90 disabled:opacity-50"
+              className="w-full py-3 px-4 rounded-xl text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all hover:opacity-95 disabled:opacity-50"
               style={{ background: portal.color }}
             >
-              {loading ? 'Please wait...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+              {loading ? (
+                <span>Please wait...</span>
+              ) : (
+                <>
+                  <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
             </button>
           </form>
-
-          {mode === 'signin' && (
-            <p className="mt-5 text-center text-xs text-slate-400">
-              Don't have an account?{' '}
-              <button onClick={() => { setMode('signup'); setError(null); }} className="font-medium" style={{ color: portal.color }}>
-                Create one
-              </button>
-            </p>
-          )}
-          {mode === 'signup' && (
-            <p className="mt-5 text-center text-xs text-slate-400">
-              Already have an account?{' '}
-              <button onClick={() => { setMode('signin'); setError(null); }} className="font-medium" style={{ color: portal.color }}>
-                Sign in
-              </button>
-            </p>
-          )}
         </div>
       </div>
     </div>
