@@ -99,14 +99,14 @@ export function getTabsForPortal(slug: SubAccount): NavTab[] {
 
 export const PORTAL_SLUGS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom', 'master'];
 
-const PATH_TO_SLUG: Record<string, SubAccount> = {
-  '/mcl': 'mcl', '/tarmal': 'tarmal', '/csl': 'csl',
-  '/mushroom': 'mushroom', '/admin': 'master', '/': 'master',
-};
-
 export function slugFromPath(pathname: string): SubAccount | null {
-  const clean = pathname.replace(/\/+$/, '').toLowerCase() || '/';
-  return PATH_TO_SLUG[clean] ?? null;
+  const segments = pathname.split('/').filter(Boolean);
+  const first = segments[0]?.toLowerCase();
+  if (!first || first === 'admin') return 'master';
+  if (['mcl', 'tarmal', 'csl', 'mushroom'].includes(first)) {
+    return first as SubAccount;
+  }
+  return null;
 }
 
 export function slugFromPathOrDefault(pathname: string): SubAccount {
