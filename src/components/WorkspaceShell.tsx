@@ -1,11 +1,11 @@
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, ReactNode } from 'react';
 import * as Icons from 'lucide-react';
 import {
   Menu, X, LogOut, Truck as TruckIcon, Upload, Download,
   ChevronDown, Building2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { PortalConfig, NavTab, TabId, SubAccount, PORTALS, MCLArea, getTabsForPortal } from '@/lib/portals';
+import { PortalConfig, TabId, SubAccount, PORTALS, MCLArea, getTabsForPortal } from '@/lib/portals';
 import { useToast } from '@/components/Toast';
 import { UserRole } from '@/types';
 
@@ -174,7 +174,9 @@ export function WorkspaceShell({
                           <button
                             key={slug}
                             onClick={() => {
-                              window.location.href = `/${slug}`;
+                              // Switch active tab within the master admin view instead of changing the URL
+                              onTabChange(slug as TabId);
+                              setShowSwitcher(false);
                             }}
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
                           >
