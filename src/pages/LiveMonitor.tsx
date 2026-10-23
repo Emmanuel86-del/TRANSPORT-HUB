@@ -136,10 +136,10 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     return () => clearInterval(interval);
   }, []);
 
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (initial = false) => {
+    if (initial) setLoading(true);
     try {
       const filter = effectiveFilter;
       let tripQuery = supabase.from('trips').select('*, vehicle:vehicles(*), driver:drivers(*)').eq('trip_date', todayStr);
@@ -166,13 +166,13 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     } catch (err) {
       console.error('Error fetching live monitor data:', err);
     } finally {
-      setLoading(false);
+      if (initial) setLoading(false);
     }
   }, [effectiveFilter, todayStr]);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5 * 60 * 1000);
+    loadData(true);
+    const interval = setInterval(() => loadData(false), 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -566,7 +566,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
               UPDATED <span style={{ color: MONITOR_COLORS.accent }}>{updatedStr}</span> · NEXT REFRESH IN <span style={{ color: MONITOR_COLORS.accent }}>{refreshInMin}:{String(refreshInSec).padStart(2, '0')}</span>
             </div>
             <button
-              onClick={loadData}
+              onClick={() => loadData(false)}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors hover:opacity-80 shadow"
               style={{ background: MONITOR_COLORS.accent, color: '#120505' }}
             >
