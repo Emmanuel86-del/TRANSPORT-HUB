@@ -221,6 +221,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         iconColor={portalColor}
         onAdd={openAdd}
         addLabel="Add Trip"
+        templateName={isTarmal ? 'trips_tahmal' : 'trips'}
       />
 
       {/* Summary Cards */}

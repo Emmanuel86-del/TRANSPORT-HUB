@@ -330,6 +330,7 @@ export function SparePartsV2({
         iconColor={portalColor}
         onAdd={openAdd}
         addLabel="Add Spare Part"
+        templateName="spare_parts"
       />
 
       {/* Master sub-account filter */}

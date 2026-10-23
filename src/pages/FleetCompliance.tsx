@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { ShieldCheck, AlertTriangle, Bell, Edit, Download, Upload } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, Bell, Edit, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
@@ -108,20 +108,6 @@ export function FleetCompliance() {
     loadData();
   };
 
-  // Download CSV Template
-  const downloadTemplate = () => {
-    const csvContent = "plate_number,insurance_start,insurance_expiry,comesa_start,comesa_expiry,ntsa_inspection_start,ntsa_inspection_expiry,truck_insurance_start,truck_insurance_expiry,trailer_insurance_start,trailer_insurance_expiry\n" +
-      "KAA 001A,2026-01-01,2027-01-01,2026-01-01,2027-01-01,2026-01-01,2027-01-01,2026-01-01,2027-01-01,2026-01-01,2027-01-01";
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'fleet_compliance_template.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   // Handle Bulk Upload CSV
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -185,12 +171,10 @@ export function FleetCompliance() {
           subtitle="Monitor Insurance, COMESA, NTSA Inspections, Truck & Trailer Expirations" 
           icon={<ShieldCheck className="h-6 w-6" />} 
           onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
-          addLabel="Add Compliance Record" 
+          addLabel="Add Compliance Record"
+          templateName="vehicle_compliance"
         />
         <div className="flex items-center gap-2">
-          <button onClick={downloadTemplate} className="btn-secondary flex items-center gap-1.5 text-xs">
-            <Download className="h-4 w-4" /> Download Template
-          </button>
           <button onClick={() => fileInputRef.current?.click()} className="btn-primary flex items-center gap-1.5 text-xs">
             <Upload className="h-4 w-4" /> Bulk Upload CSV
           </button>

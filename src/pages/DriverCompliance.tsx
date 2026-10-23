@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { UserCheck, AlertTriangle, Bell, Edit, Download, Upload } from 'lucide-react';
+import { UserCheck, AlertTriangle, Bell, Edit, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
@@ -100,20 +100,6 @@ export function DriverCompliance() {
     loadData();
   };
 
-  // Download Driver CSV Template
-  const downloadTemplate = () => {
-    const csvContent = "driver_phone,license_start,license_expiry,compliance_start,compliance_expiry,atic_insurance_start,atic_insurance_expiry\n" +
-      "0712345678,2026-01-01,2027-01-01,2026-01-01,2027-01-01,2026-01-01,2027-01-01";
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'driver_compliance_template.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   // Handle Driver Bulk Upload CSV
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -172,12 +158,10 @@ export function DriverCompliance() {
           subtitle="Monitor Driver's Licenses, Compliance Documents, and ATIC Insurance Expirations" 
           icon={<UserCheck className="h-6 w-6" />} 
           onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
-          addLabel="Add Driver Compliance" 
+          addLabel="Add Driver Compliance"
+          templateName="driver_compliance"
         />
         <div className="flex items-center gap-2">
-          <button onClick={downloadTemplate} className="btn-secondary flex items-center gap-1.5 text-xs">
-            <Download className="h-4 w-4" /> Download Template
-          </button>
           <button onClick={() => fileInputRef.current?.click()} className="btn-primary flex items-center gap-1.5 text-xs">
             <Upload className="h-4 w-4" /> Bulk Upload CSV
           </button>

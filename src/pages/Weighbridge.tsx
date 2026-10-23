@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Scale, Search, Trash2, Edit, Flag, AlertTriangle, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
+import { Scale, Search, Trash2, Edit, Flag, AlertTriangle, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { WeighbridgeEntry, WeighbridgeEntryInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 const emptyForm: WeighbridgeEntryInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   date: new Date().toISOString().slice(0, 10),
@@ -45,7 +46,7 @@ export function Weighbridge() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [docs, setDocs] = useState<string[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
@@ -67,20 +68,8 @@ export function Weighbridge() {
     return matchSearch;
   });
 
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (e: any) => { const { id, created_at, ...rest } = e; setForm(rest); setEditId(id); setModalOpen(true); };
-
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split('.').pop();
-    const fileName = `weighbridge_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('documents').upload(fileName, file);
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
-    }
-    setUploading(false);
-  };
+  const openAdd = () => { setForm(emptyForm); setEditId(null); setDocs([]); setModalOpen(true); };
+  const openEdit = (e: any) => { const { id, created_at, ...rest } = e; setForm(rest); setEditId(id); setDocs(rest.attachment_url ? [rest.attachment_url] : []); setModalOpen(true); };
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -124,10 +113,11 @@ export function Weighbridge() {
 
   const save = async () => {
     setSaving(true);
+    const payload = { ...form, attachment_url: docs[0] || null, attachment_name: docs[0] ? docs[0].split('/').pop() || null : null };
     if (editId) {
-      await supabase.from('weighbridge_entries').update(form).eq('id', editId);
+      await supabase.from('weighbridge_entries').update(payload).eq('id', editId);
     } else {
-      await supabase.from('weighbridge_entries').insert(form);
+      await supabase.from('weighbridge_entries').insert(payload);
     }
     setSaving(false);
     setModalOpen(false);
@@ -147,7 +137,7 @@ export function Weighbridge() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Weighbridge Ledger" subtitle="Weighbridge ticket entries and weight summaries" icon={<Scale className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Entry" />
+      <PageHeader title="Weighbridge Ledger" subtitle="Weighbridge ticket entries and weight summaries" icon={<Scale className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Entry" templateName="weighbridge" />
 
       {/* Tabs & Bulk Button Toolbar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-3">
@@ -242,14 +232,12 @@ export function Weighbridge() {
           <div><label className="label">Goods</label><input className="input" value={form.goods || ''} onChange={e => update('goods', e.target.value)} /></div>
           <div><label className="label">Lot / Route</label><input className="input" value={form.lot_route_consignee || ''} onChange={e => update('lot_route_consignee', e.target.value)} /></div>
           <div className="sm:col-span-2">
-            <label className="label">Upload Scanned Ticket</label>
-            <div className="flex items-center gap-2">
-              <label className="btn btn-secondary cursor-pointer">
-                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-              </label>
-              {form.attachment_url && <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1"><ExternalLink className="h-4 w-4" /> View</a>}
-            </div>
+            <DocumentUpload
+              folder="weighbridge"
+              recordId={editId || 'unsaved'}
+              existingDocs={docs}
+              onDocsChange={setDocs}
+            />
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">

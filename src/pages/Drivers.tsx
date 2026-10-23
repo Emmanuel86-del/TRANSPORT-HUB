@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Users, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
+import { Users, Search, Trash2, Edit, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Driver, DriverInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 const emptyForm: DriverInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   name: '',
@@ -41,7 +42,7 @@ export function Drivers() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [docs, setDocs] = useState<string[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
@@ -55,20 +56,8 @@ export function Drivers() {
 
   const filtered = drivers.filter(d => !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.license_number?.toLowerCase().includes(search.toLowerCase()));
 
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (d: any) => { const { id, created_at, ...rest } = d; setForm(rest); setEditId(id); setModalOpen(true); };
-
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split('.').pop();
-    const fileName = `driver_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('documents').upload(fileName, file);
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
-    }
-    setUploading(false);
-  };
+  const openAdd = () => { setForm(emptyForm); setEditId(null); setDocs([]); setModalOpen(true); };
+  const openEdit = (d: any) => { const { id, created_at, ...rest } = d; setForm(rest); setEditId(id); setDocs(rest.attachment_url ? [rest.attachment_url] : []); setModalOpen(true); };
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -102,8 +91,9 @@ export function Drivers() {
 
   const save = async () => {
     setSaving(true);
-    if (editId) await supabase.from('drivers').update(form).eq('id', editId);
-    else await supabase.from('drivers').insert(form);
+    const payload = { ...form, attachment_url: docs[0] || null, attachment_name: docs[0] ? docs[0].split('/').pop() || null : null };
+    if (editId) await supabase.from('drivers').update(payload).eq('id', editId);
+    else await supabase.from('drivers').insert(payload);
     setSaving(false); setModalOpen(false); load();
   };
 
@@ -119,7 +109,7 @@ export function Drivers() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Drivers Directory" subtitle="Driver licensing, compliance records, and contact info" icon={<Users className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Driver" />
+      <PageHeader title="Drivers Directory" subtitle="Driver licensing, compliance records, and contact info" icon={<Users className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Driver" templateName="drivers" />
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -199,14 +189,12 @@ export function Drivers() {
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="label">Upload Document</label>
-            <div className="flex items-center gap-2">
-              <label className="btn btn-secondary cursor-pointer">
-                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-              </label>
-              {form.attachment_url && <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1"><ExternalLink className="h-4 w-4" /> View</a>}
-            </div>
+            <DocumentUpload
+              folder="drivers"
+              recordId={editId || 'unsaved'}
+              existingDocs={docs}
+              onDocsChange={setDocs}
+            />
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">

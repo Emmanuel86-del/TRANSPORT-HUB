@@ -1,6 +1,7 @@
 import { UniversalUploadModal } from '@/components/UniversalUpload';
+import { DocumentUpload } from '@/components/DocumentUpload';
 import { useEffect, useState, useCallback } from 'react';
-import { Truck, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
+import { Truck, Search, Trash2, Edit, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
@@ -60,7 +61,7 @@ export function Vehicles() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [docs, setDocs] = useState<string[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
@@ -76,20 +77,8 @@ export function Vehicles() {
     !search || v.plate_number.toLowerCase().includes(search.toLowerCase()) || v.make?.toLowerCase().includes(search.toLowerCase()) || v.model?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (v: any) => { const { id, created_at, ...rest } = v; setForm(rest); setEditId(id); setModalOpen(true); };
-
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split('.').pop();
-    const fileName = `vehicle_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('documents').upload(fileName, file);
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-      setForm(prev => ({ ...prev, documents: urlData.publicUrl }));
-    }
-    setUploading(false);
-  };
+  const openAdd = () => { setForm(emptyForm); setEditId(null); setDocs([]); setModalOpen(true); };
+  const openEdit = (v: any) => { const { id, created_at, ...rest } = v; setForm(rest); setEditId(id); setDocs(rest.documents ? [rest.documents] : []); setModalOpen(true); };
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -127,8 +116,9 @@ export function Vehicles() {
 
   const save = async () => {
     setSaving(true);
-    if (editId) await supabase.from('vehicles').update(form).eq('id', editId);
-    else await supabase.from('vehicles').insert(form);
+    const payload = { ...form, documents: docs[0] || null };
+    if (editId) await supabase.from('vehicles').update(payload).eq('id', editId);
+    else await supabase.from('vehicles').insert(payload);
     setSaving(false); setModalOpen(false); load();
   };
 
@@ -144,7 +134,7 @@ export function Vehicles() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Vehicle Management" subtitle="Vehicle inventory, insurance, and inspection tracking" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" />
+      <PageHeader title="Vehicle Management" subtitle="Vehicle inventory, insurance, and inspection tracking" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" templateName="vehicles" />
 
       {/* Universal Auto-Routing Data Importer Component */}
       <UniversalUploadModal />
@@ -232,14 +222,12 @@ export function Vehicles() {
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="label">Upload Document</label>
-            <div className="flex items-center gap-2">
-              <label className="btn btn-secondary cursor-pointer">
-                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-              </label>
-              {form.documents && <a href={form.documents} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1"><ExternalLink className="h-4 w-4" /> View</a>}
-            </div>
+            <DocumentUpload
+              folder="vehicles"
+              recordId={editId || 'unsaved'}
+              existingDocs={docs}
+              onDocsChange={setDocs}
+            />
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">

@@ -134,6 +134,7 @@ export function SubAccountTallies({ mclArea, portalColor }: { mclArea: MCLArea |
         iconColor={portalColor}
         onAdd={openAdd}
         addLabel="Add Tally"
+        templateName="tallies"
       />
 
       {/* Summary Cards */}

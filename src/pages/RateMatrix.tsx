@@ -90,7 +90,7 @@ export function RateMatrix() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Rate Matrix" subtitle="Route mileage payment rules engine" icon={<Calculator className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Rate" />
+      <PageHeader title="Rate Matrix" subtitle="Route mileage payment rules engine" icon={<Calculator className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Rate" templateName="rate_matrix" />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-sm">

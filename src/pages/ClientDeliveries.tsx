@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { FileText, Search, Trash2, Edit, Upload, ExternalLink, Users, FileSpreadsheet, Download } from 'lucide-react';
+import { FileText, Search, Trash2, Edit, ExternalLink, Users, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Client, ClientDelivery, ClientInsert, ClientDeliveryInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 const statusBadge = (status: string) => {
   switch (status) {
@@ -69,7 +70,7 @@ export function ClientDeliveries() {
   const [saving, setSaving] = useState(false);
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null);
   const [deleteDeliveryId, setDeleteDeliveryId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [deliveryDocs, setDeliveryDocs] = useState<string[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
@@ -134,15 +135,16 @@ export function ClientDeliveries() {
   const openAddDelivery = () => {
     setDeliveryForm({ ...emptyDelivery, client_id: selectedClientId });
     setEditDeliveryId(null);
+    setDeliveryDocs([]);
     setDeliveryModalOpen(true);
   };
   const openEditDelivery = (d: ClientDelivery) => {
     const { id, created_at, client, ...rest } = d;
-    setDeliveryForm(rest); setEditDeliveryId(id); setDeliveryModalOpen(true);
+    setDeliveryForm(rest); setEditDeliveryId(id); setDeliveryDocs(rest.attachment_url ? [rest.attachment_url] : []); setDeliveryModalOpen(true);
   };
   const saveDelivery = async () => {
     setSaving(true);
-    const data = { ...deliveryForm, client_id: deliveryForm.client_id || null };
+    const data = { ...deliveryForm, client_id: deliveryForm.client_id || null, attachment_url: deliveryDocs[0] || null, attachment_name: deliveryDocs[0] ? deliveryDocs[0].split('/').pop() || null : null };
     if (editDeliveryId) {
       await supabase.from('client_deliveries').update(data).eq('id', editDeliveryId);
     } else {
@@ -170,20 +172,6 @@ export function ClientDeliveries() {
     const tax = net * 0.16;
     const total = net + tax;
     setDeliveryForm(prev => ({ ...prev, net_amount: net, tax_amount: Math.round(tax), total_amount: Math.round(total) }));
-  };
-
-  // File upload to Supabase Storage
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split('.').pop();
-    const fileName = `delivery_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('deliveries').upload(fileName, file);
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('deliveries').getPublicUrl(fileName);
-      updateDelivery('attachment_url', urlData.publicUrl);
-      updateDelivery('attachment_name', file.name);
-    }
-    setUploading(false);
   };
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -231,7 +219,7 @@ export function ClientDeliveries() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Client Deliveries" subtitle="Delivery notes, invoices, and client account management" icon={<FileText className="h-6 w-6" />} onAdd={openAddDelivery} addLabel="Add Delivery" />
+      <PageHeader title="Client Deliveries" subtitle="Delivery notes, invoices, and client account management" icon={<FileText className="h-6 w-6" />} onAdd={openAddDelivery} addLabel="Add Delivery" templateName="client_deliveries" />
 
       {/* Client selector + add client */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -503,33 +491,13 @@ export function ClientDeliveries() {
           <div className="sm:col-span-3">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-200 pb-1.5 mb-3 mt-2">Attachment</h4>
           </div>
-          <div className="sm:col-span-2">
-            <label className="label">Upload Scanned Document (PDF / Image)</label>
-            <div className="flex items-center gap-2">
-              <label className="btn btn-secondary cursor-pointer">
-                <Upload className="h-4 w-4" />
-                {uploading ? 'Uploading...' : 'Choose File'}
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) handleUpload(file);
-                }} />
-              </label>
-              {deliveryForm.attachment_url && (
-                <a href={deliveryForm.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                  <ExternalLink className="h-4 w-4" /> {deliveryForm.attachment_name || 'View attachment'}
-                </a>
-              )}
-            </div>
-          </div>
-          <div>
-            <button
-              onClick={() => { updateDelivery('attachment_url', null); updateDelivery('attachment_name', null); }}
-              className="btn btn-secondary text-red-500"
-              disabled={!deliveryForm.attachment_url}
-            >
-              <Trash2 className="h-4 w-4" />
-              Remove
-            </button>
+          <div className="sm:col-span-3">
+            <DocumentUpload
+              folder="client_deliveries"
+              recordId={editDeliveryId || 'unsaved'}
+              existingDocs={deliveryDocs}
+              onDocsChange={setDeliveryDocs}
+            />
           </div>
           <div className="sm:col-span-3">
             <label className="label">Notes</label>

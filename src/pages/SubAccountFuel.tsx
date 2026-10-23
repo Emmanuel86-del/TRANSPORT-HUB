@@ -276,6 +276,7 @@ export function SubAccountFuel({ mclArea, portalColor }: { mclArea: MCLArea | nu
         iconColor={portalColor}
         onAdd={openAdd}
         addLabel="Add Fuel Record"
+        templateName="fuel"
       />
 
       {/* Summary Cards */}

@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
-import { DollarSign, Search, Trash2, Edit, Upload, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
+import { DollarSign, Search, Trash2, Edit, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PayrollEntry, PayrollEntryInsert } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { DocumentUpload } from '@/components/DocumentUpload';
 
 const emptyForm: PayrollEntryInsert & { attachment_url?: string | null; attachment_name?: string | null } = {
   pay_period: '',
@@ -42,7 +43,7 @@ export function Payroll() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const [docs, setDocs] = useState<string[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
 
   const load = useCallback(async () => {
@@ -56,20 +57,8 @@ export function Payroll() {
 
   const filtered = payrolls.filter(p => !search || p.employee_name.toLowerCase().includes(search.toLowerCase()) || p.pay_period.toLowerCase().includes(search.toLowerCase()));
 
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setModalOpen(true); };
-  const openEdit = (p: any) => { const { id, created_at, ...rest } = p; setForm(rest); setEditId(id); setModalOpen(true); };
-
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const ext = file.name.split('.').pop();
-    const fileName = `payroll_${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from('documents').upload(fileName, file);
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(fileName);
-      setForm(prev => ({ ...prev, attachment_url: urlData.publicUrl, attachment_name: file.name }));
-    }
-    setUploading(false);
-  };
+  const openAdd = () => { setForm(emptyForm); setEditId(null); setDocs([]); setModalOpen(true); };
+  const openEdit = (p: any) => { const { id, created_at, ...rest } = p; setForm(rest); setEditId(id); setDocs(rest.attachment_url ? [rest.attachment_url] : []); setModalOpen(true); };
 
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -107,8 +96,9 @@ export function Payroll() {
 
   const save = async () => {
     setSaving(true);
-    if (editId) await supabase.from('payroll').update(form).eq('id', editId);
-    else await supabase.from('payroll').insert(form);
+    const payload = { ...form, attachment_url: docs[0] || null, attachment_name: docs[0] ? docs[0].split('/').pop() || null : null };
+    if (editId) await supabase.from('payroll').update(payload).eq('id', editId);
+    else await supabase.from('payroll').insert(payload);
     setSaving(false); setModalOpen(false); load();
   };
 
@@ -130,7 +120,7 @@ export function Payroll() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Payroll Management" subtitle="Employee salaries, allowances, and payment schedules" icon={<DollarSign className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Payroll Entry" />
+      <PageHeader title="Payroll Management" subtitle="Employee salaries, allowances, and payment schedules" icon={<DollarSign className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Payroll Entry" templateName="payroll" />
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -212,14 +202,12 @@ export function Payroll() {
             </select>
           </div>
           <div className="sm:col-span-2">
-            <label className="label">Upload Payslip Document</label>
-            <div className="flex items-center gap-2">
-              <label className="btn btn-secondary cursor-pointer">
-                <Upload className="h-4 w-4" /> {uploading ? 'Uploading...' : 'Choose File'}
-                <input type="file" accept=".pdf,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); }} />
-              </label>
-              {form.attachment_url && <a href={form.attachment_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 flex items-center gap-1"><ExternalLink className="h-4 w-4" /> View</a>}
-            </div>
+            <DocumentUpload
+              folder="payroll"
+              recordId={editId || 'unsaved'}
+              existingDocs={docs}
+              onDocsChange={setDocs}
+            />
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">

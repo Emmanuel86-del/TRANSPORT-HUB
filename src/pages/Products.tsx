@@ -149,7 +149,7 @@ export function Products() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Products" subtitle="Track goods and cargo being transported" icon={<Package className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Product" />
+      <PageHeader title="Products" subtitle="Track goods and cargo being transported" icon={<Package className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Product" templateName="products" />
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="relative flex-1 max-w-sm">

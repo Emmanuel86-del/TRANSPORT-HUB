@@ -246,6 +246,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
         iconColor={portalColor}
         onAdd={openAdd}
         addLabel="Add Container"
+        templateName="containers"
       />
 
       {/* Summary Cards */}

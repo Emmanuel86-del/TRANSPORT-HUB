@@ -76,7 +76,7 @@ export function DailyDispatch() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Daily Dispatch Log" subtitle="Track daily trip dispatches per truck, driver, and route" icon={<ClipboardList className="h-6 w-6" />} />
+      <PageHeader title="Daily Dispatch Log" subtitle="Track daily trip dispatches per truck, driver, and route" icon={<ClipboardList className="h-6 w-6" />} templateName="daily_dispatch" />
 
       {/* Filters */}
       <div className="card p-4">

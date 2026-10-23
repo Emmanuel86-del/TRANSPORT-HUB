@@ -214,7 +214,8 @@ export function SpareParts() {
           subtitle="Manage Tyres, Batteries, and General Spares with Automated Stock Threshold Alerts" 
           icon={<Wrench className="h-6 w-6" />} 
           onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
-          addLabel="Add Spare Part" 
+          addLabel="Add Spare Part"
+          templateName="spare_parts"
         />
         <div className="flex flex-wrap items-center gap-2">
           <button 

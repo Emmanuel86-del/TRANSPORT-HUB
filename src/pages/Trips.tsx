@@ -94,7 +94,8 @@ export function Trips() {
         subtitle="Manage active and historical vehicle trips, routes, and cargo allocations" 
         icon={<RouteIcon className="h-6 w-6" />} 
         onAdd={() => { setForm(emptyForm); setEditId(null); setTripDocs([]); setModalOpen(true); }} 
-        addLabel="Create New Trip" 
+        addLabel="Create New Trip"
+        templateName="trips"
       />
 
       {/* Filter Controls Bar */}

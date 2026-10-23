@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Plus, Download } from 'lucide-react';
-import { useToast } from '@/components/Toast';
+import { downloadTemplate, TemplateName } from '@/lib/templates';
 
 type PageHeaderProps = {
   title: string;
@@ -10,11 +10,10 @@ type PageHeaderProps = {
   onAdd?: () => void;
   addLabel?: string;
   actions?: ReactNode;
+  templateName?: TemplateName;
 };
 
-export function PageHeader({ title, subtitle, icon, iconColor, onAdd, addLabel = 'Add New', actions }: PageHeaderProps) {
-  const { showToast } = useToast();
-
+export function PageHeader({ title, subtitle, icon, iconColor, onAdd, addLabel = 'Add New', actions, templateName }: PageHeaderProps) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
@@ -31,13 +30,15 @@ export function PageHeader({ title, subtitle, icon, iconColor, onAdd, addLabel =
       </div>
       <div className="flex items-center gap-2">
         {actions}
-        <button
-          onClick={() => showToast('Template download coming soon', 'info')}
-          className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
-        >
-          <Download className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Download Templates</span>
-        </button>
+        {templateName && (
+          <button
+            onClick={() => downloadTemplate(templateName)}
+            className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Download Template</span>
+          </button>
+        )}
         {onAdd && (
           <button onClick={onAdd} className="btn-primary">
             <Plus className="h-4 w-4" />
