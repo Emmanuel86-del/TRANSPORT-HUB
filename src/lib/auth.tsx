@@ -29,11 +29,16 @@ import { LiveMonitor } from '@/pages/LiveMonitor';
 
 import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea } from '@/lib/portals';
 
-// Error Boundary to prevent page crashes from resetting auth or kicking back to overview
-class PageErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
-  state = { hasError: false, error: null };
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
 
-  static getDerivedStateFromError(error: Error) {
+// Error Boundary with explicit TypeScript state interface to fix build errors
+class PageErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
