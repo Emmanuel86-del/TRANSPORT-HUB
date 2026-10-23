@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const { data, error } = (await Promise.race([profilePromise, timeoutPromise])) as any;
 
-      if (error) {
+      if (error || !data) {
         console.error('Error fetching profile:', error);
         return null;
       }
@@ -79,10 +79,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (currentSession?.user) {
         const userProfile = await fetchProfile(currentSession.user.id);
-        setProfile(userProfile);
-
-        if (userProfile?.sub_account) {
-          setSubAccountFilter(userProfile.sub_account);
+        if (userProfile) {
+          setProfile(userProfile);
+          if (userProfile?.sub_account) {
+            setSubAccountFilter(userProfile.sub_account);
+          }
         }
       }
     } catch (err) {
@@ -105,9 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (newSession?.user) {
         const userProfile = await fetchProfile(newSession.user.id);
-        setProfile(userProfile);
-        if (userProfile?.sub_account) {
-          setSubAccountFilter(userProfile.sub_account);
+        // Only update profile if successfully fetched; prevents dropping profile on network hiccups
+        if (userProfile) {
+          setProfile(userProfile);
+          if (userProfile?.sub_account) {
+            setSubAccountFilter(userProfile.sub_account);
+          }
         }
       } else {
         setProfile(null);
@@ -128,7 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (data.user) {
         const userProfile = await fetchProfile(data.user.id);
-        setProfile(userProfile);
+        if (userProfile) {
+          setProfile(userProfile);
+        }
 
         const currentSlug = getCurrentSlug();
         const userSubAccount = userProfile?.sub_account ?? 'master';
