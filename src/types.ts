@@ -213,6 +213,7 @@ export type Profile = {
   email: string | null;
   full_name: string | null;
   role: UserRole;
+  sub_account: string;
   created_at: string;
 };
 

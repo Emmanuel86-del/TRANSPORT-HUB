@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Truck as TruckIcon, Mail, Lock, User, Eye, EyeOff, AlertCircle, RefreshCw, UserCog } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { PortalConfig } from '@/lib/portals';
 
-export function AuthPage() {
+export function AuthPage({ portal }: { portal: PortalConfig }) {
   const { signIn, signUp, authError, retry, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -34,7 +35,7 @@ export function AuthPage() {
         setLoading(false);
         return;
       }
-      const { error } = await signUp(email, password, fullName);
+      const { error } = await signUp(email, password, fullName, portal.slug);
       if (error) {
         setError(error);
         setLoading(false);
@@ -45,19 +46,20 @@ export function AuthPage() {
   const displayedError = error || authError;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center px-4 py-8" style={{ background: `linear-gradient(135deg, ${portal.colorDark}, ${portal.color})` }}>
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-blue-600/10 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-blue-600/5 blur-3xl" />
+        <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-white/5 blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-white/5 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-md">
+        {/* Portal Header */}
         <div className="flex flex-col items-center mb-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/30 mb-3">
-            <TruckIcon className="h-7 w-7" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-lg mb-3" style={{ boxShadow: `0 8px 24px ${portal.color}40` }}>
+            <TruckIcon className="h-7 w-7" style={{ color: portal.color }} />
           </div>
-          <h1 className="text-2xl font-bold text-white">Suraj Ashok Limited</h1>
-          <p className="text-sm text-slate-400 mt-1">Fleet Management System</p>
+          <h1 className="text-2xl font-bold text-white">{portal.fullName}</h1>
+          <p className="text-sm text-white/70 mt-1">Fleet Management System</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-8">
@@ -152,13 +154,13 @@ export function AuthPage() {
             </div>
 
             {mode === 'signup' && (
-              <div className="flex items-center gap-3 rounded-xl border-2 border-slate-200 bg-slate-50 p-3">
-                <div className="shrink-0 text-slate-400">
+              <div className="flex items-center gap-3 rounded-xl border-2 p-3" style={{ borderColor: `${portal.color}20`, background: `${portal.color}08` }}>
+                <div className="shrink-0" style={{ color: portal.color }}>
                   <UserCog className="h-6 w-6" />
                 </div>
                 <div className="flex-1">
-                  <span className="text-sm font-medium text-slate-600 block">Employee Account</span>
-                  <span className="text-xs text-slate-400">All new accounts start as Employee. A Corporate Admin can promote you after sign-up.</span>
+                  <span className="text-sm font-medium text-slate-700 block">Employee Account — {portal.name}</span>
+                  <span className="text-xs text-slate-500">All new accounts start as Employee. An admin can promote you after sign-up.</span>
                 </div>
               </div>
             )}
@@ -166,7 +168,8 @@ export function AuthPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full py-2.5"
+              className="w-full py-2.5 rounded-lg text-white font-medium shadow-sm transition-all hover:opacity-90 disabled:opacity-50"
+              style={{ background: portal.color }}
             >
               {loading ? 'Please wait...' : mode === 'signin' ? 'Sign In' : 'Create Account'}
             </button>
@@ -175,7 +178,7 @@ export function AuthPage() {
           {mode === 'signin' && (
             <p className="mt-5 text-center text-xs text-slate-400">
               Don't have an account?{' '}
-              <button onClick={() => { setMode('signup'); setError(null); }} className="text-blue-600 hover:text-blue-700 font-medium">
+              <button onClick={() => { setMode('signup'); setError(null); }} className="font-medium" style={{ color: portal.color }}>
                 Create one
               </button>
             </p>
@@ -183,7 +186,7 @@ export function AuthPage() {
           {mode === 'signup' && (
             <p className="mt-5 text-center text-xs text-slate-400">
               Already have an account?{' '}
-              <button onClick={() => { setMode('signin'); setError(null); }} className="text-blue-600 hover:text-blue-700 font-medium">
+              <button onClick={() => { setMode('signin'); setError(null); }} className="font-medium" style={{ color: portal.color }}>
                 Sign in
               </button>
             </p>

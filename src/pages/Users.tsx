@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { Profile, UserRole } from '@/types';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
+import { portalLabel } from '@/lib/portals';
 
 const roleBadge = (role: UserRole) => {
   switch (role) {
@@ -113,6 +114,7 @@ export function Users() {
               <tr>
                 <th>User</th>
                 <th>Email</th>
+                <th>Sub-Account</th>
                 <th>Current Role</th>
                 <th>Change Role</th>
               </tr>
@@ -132,6 +134,7 @@ export function Users() {
                     </div>
                   </td>
                   <td className="text-slate-600 text-sm">{p.email}</td>
+                  <td className="text-slate-600 text-sm capitalize">{portalLabel(p.sub_account)}</td>
                   <td>{roleBadge(p.role)}</td>
                   <td>
                     <select

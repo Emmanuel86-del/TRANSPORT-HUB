@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { supabase, setSubAccountFilter } from '@/lib/supabase';
 import { Profile } from '@/types';
+import { SubAccount, slugFromPath, portalLabel, pathForSlug } from '@/lib/portals';
 
 type AuthState = {
   session: Session | null;
@@ -9,8 +10,9 @@ type AuthState = {
   profile: Profile | null;
   loading: boolean;
   authError: string | null;
+  subAccount: SubAccount | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string, subAccount: SubAccount) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   retry: () => void;
 };
@@ -19,12 +21,17 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 
 const TIMEOUT_MS = 8000;
 
+function getCurrentSlug(): SubAccount | null {
+  return slugFromPath(window.location.pathname);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [subAccount, setSubAccount] = useState<SubAccount | null>(getCurrentSlug());
   const loadingResolved = useRef(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -61,10 +68,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('[Auth Error] Profile fetch failed:', error.code, error.message, error.details);
     }
     setProfile(data as Profile | null);
+    return data as Profile | null;
+  }, []);
+
+  const validateAndEnforcePortal = useCallback(async (fetchedProfile: Profile | null): Promise<string | null> => {
+    if (!fetchedProfile) return null;
+    const portalSlug = getCurrentSlug();
+    if (!portalSlug) return null;
+
+    const userSubAccount = fetchedProfile.sub_account || 'master';
+
+    if (portalSlug === 'master') {
+      if (userSubAccount !== 'master') {
+        await supabase.auth.signOut();
+        setProfile(null);
+        const correctPath = pathForSlug(userSubAccount as SubAccount);
+        return `This account belongs to ${portalLabel(userSubAccount)}. Log in at ${correctPath}`;
+      }
+      return null;
+    }
+
+    if (userSubAccount === 'master') {
+      window.location.pathname = '/admin';
+      return null;
+    }
+
+    if (userSubAccount !== portalSlug) {
+      await supabase.auth.signOut();
+      setProfile(null);
+      const correctPath = pathForSlug(userSubAccount as SubAccount);
+      return `This account belongs to ${portalLabel(userSubAccount)}. Log in at ${correctPath}`;
+    }
+
+    return null;
   }, []);
 
   const initialize = useCallback(async () => {
     startLoadingWithTimeout();
+    const slug = getCurrentSlug();
+    setSubAccount(slug);
+    setSubAccountFilter(slug);
     try {
       const { data: { session: existingSession }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
@@ -76,7 +119,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(existingSession);
       setUser(existingSession?.user ?? null);
       if (existingSession?.user) {
-        await fetchProfile(existingSession.user.id);
+        const fetchedProfile = await fetchProfile(existingSession.user.id);
+        const portalError = await validateAndEnforcePortal(fetchedProfile);
+        if (portalError) {
+          setAuthError(portalError);
+        } else if (fetchedProfile) {
+          setSubAccountFilter(fetchedProfile.sub_account as SubAccount);
+        }
       }
       finishLoading();
     } catch (err) {
@@ -84,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthError('Connection error — please check your network and try again.');
       finishLoading();
     }
-  }, [fetchProfile, finishLoading, startLoadingWithTimeout]);
+  }, [fetchProfile, finishLoading, startLoadingWithTimeout, validateAndEnforcePortal]);
 
   useEffect(() => {
     initialize();
@@ -95,11 +144,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (newSession?.user) {
         (async () => {
           startLoadingWithTimeout();
-          await fetchProfile(newSession.user.id);
+          const fetchedProfile = await fetchProfile(newSession.user.id);
+          const portalError = await validateAndEnforcePortal(fetchedProfile);
+          if (portalError) {
+            setAuthError(portalError);
+          } else if (fetchedProfile) {
+            setSubAccountFilter(fetchedProfile.sub_account as SubAccount);
+          }
           finishLoading();
         })();
       } else {
         setProfile(null);
+        setSubAccountFilter(getCurrentSlug());
         finishLoading();
       }
     });
@@ -108,7 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       authListener.subscription.unsubscribe();
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [initialize, fetchProfile, startLoadingWithTimeout, finishLoading]);
+  }, [initialize, fetchProfile, startLoadingWithTimeout, finishLoading, validateAndEnforcePortal]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     setAuthError(null);
@@ -120,13 +176,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
+  const signUp = useCallback(async (email: string, password: string, fullName: string, sub: SubAccount) => {
     setAuthError(null);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName, role: 'employee' },
+        data: { full_name: fullName, role: 'employee', sub_account: sub },
       },
     });
     if (error) {
@@ -143,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setProfile(null);
     setAuthError(null);
+    setSubAccountFilter(getCurrentSlug());
   }, []);
 
   const retry = useCallback(() => {
@@ -151,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [initialize]);
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, authError, signIn, signUp, signOut, retry }}>
+    <AuthContext.Provider value={{ session, user, profile, loading, authError, subAccount, signIn, signUp, signOut, retry }}>
       {children}
     </AuthContext.Provider>
   );

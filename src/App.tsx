@@ -25,6 +25,7 @@ import { Users } from '@/pages/Users';
 import { UniversalUploadModal } from '@/components/UniversalUpload';
 import { LoadingSpinner } from '@/components/Shared';
 import { UserRole, hasAccess } from '@/types';
+import { portalFromPath, PORTALS } from '@/lib/portals';
 
 type Page = 'dashboard' | 'trips' | 'daily-dispatch' | 'vehicles' | 'fleet-compliance' | 'drivers' | 'driver-compliance' | 'staff' | 'rate-matrix' | 'weighbridge' | 'client-deliveries' | 'payroll' | 'users' | 'products' | 'spare-parts' | 'work-records';
 
@@ -36,7 +37,7 @@ const navItems: NavItem[] = [
   { id: 'daily-dispatch', label: 'Daily Dispatch', icon: <ClipboardList className="h-5 w-5" />, minRole: 'employee' },
   { id: 'vehicles', label: 'Fleet Vehicles', icon: <Truck className="h-5 w-5" />, minRole: 'employee' },
   { id: 'fleet-compliance', label: 'Fleet Compliance', icon: <ShieldCheck className="h-5 w-5" />, minRole: 'employee' },
-  { id: 'drivers', label: 'Drivers', icon: <Users className="h-5 w-5" />, minRole: 'employee' },
+  { id: 'drivers', label: 'Drivers', icon: <UsersIcon className="h-5 w-5" />, minRole: 'employee' },
   { id: 'driver-compliance', label: 'Driver Compliance', icon: <UserCheck className="h-5 w-5" />, minRole: 'employee' },
   { id: 'weighbridge', label: 'Weighbridge', icon: <Scale className="h-5 w-5" />, minRole: 'employee' },
   { id: 'products', label: 'Products', icon: <Package className="h-5 w-5" />, minRole: 'employee' },
@@ -86,6 +87,8 @@ function AppContent() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
+  const portal = portalFromPath(window.location.pathname) ?? PORTALS.master;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
@@ -101,7 +104,7 @@ function AppContent() {
   }
 
   if (!user || !profile) {
-    return <AuthPage />;
+    return <AuthPage portal={portal} />;
   }
 
   const userRole = profile.role;
@@ -121,36 +124,37 @@ function AppContent() {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-slate-100 flex flex-col transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 text-slate-100 flex flex-col transition-transform duration-300 lg:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
+        style={{ background: `linear-gradient(180deg, ${portal.colorDark}, ${portal.color})` }}
       >
-        <div className="flex items-center justify-between px-5 py-5 border-b border-slate-800">
+        <div className="flex items-center justify-between px-5 py-5 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
-              <TruckIcon className="h-6 w-6" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white shadow-lg">
+              <TruckIcon className="h-6 w-6" style={{ color: portal.color }} />
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-tight">Suraj Ashok Limited</h1>
-              <p className="text-xs text-slate-400">Fleet Management</p>
+              <h1 className="text-base font-bold tracking-tight">{portal.fullName}</h1>
+              <p className="text-xs text-white/60">Fleet Management</p>
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="lg:hidden rounded-lg p-1 text-white/60 hover:bg-white/10 hover:text-white"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="px-5 py-3 border-b border-slate-800">
+        <div className="px-5 py-3 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${userRole === 'corporate_admin' ? 'bg-blue-600 text-white' : userRole === 'manager' ? 'bg-emerald-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${userRole === 'corporate_admin' ? 'bg-white/20 text-white' : userRole === 'manager' ? 'bg-white/15 text-white' : 'bg-white/10 text-white/80'}`}>
               {roleIcon(userRole)}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-slate-200 truncate">{profile.full_name || profile.email}</p>
-              <p className="text-xs text-slate-500">{roleLabel(userRole)}</p>
+              <p className="text-sm font-medium text-white truncate">{profile.full_name || profile.email}</p>
+              <p className="text-xs text-white/50">{roleLabel(userRole)}</p>
             </div>
           </div>
         </div>
@@ -162,22 +166,22 @@ function AppContent() {
               onClick={() => navigate(item.id)}
               className={`flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
                 page === item.id
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
               }`}
             >
               {item.icon}
               {item.label}
-              {item.minRole === 'corporate_admin' && <Shield className="h-3 w-3 ml-auto text-slate-500" />}
-              {item.minRole === 'manager' && <Briefcase className="h-3 w-3 ml-auto text-slate-500" />}
+              {item.minRole === 'corporate_admin' && <Shield className="h-3 w-3 ml-auto opacity-50" />}
+              {item.minRole === 'manager' && <Briefcase className="h-3 w-3 ml-auto opacity-50" />}
             </button>
           ))}
         </nav>
 
-        <div className="px-3 py-3 border-t border-slate-800">
+        <div className="px-3 py-3 border-t border-white/10">
           <button
             onClick={() => signOut()}
-            className="flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium text-slate-400 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200"
+            className="flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium text-white/60 hover:bg-red-500/20 hover:text-red-200 transition-all duration-200"
           >
             <LogOut className="h-5 w-5" />
             Sign Out
@@ -196,10 +200,10 @@ function AppContent() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg text-white" style={{ background: portal.color }}>
                 <TruckIcon className="h-5 w-5" />
               </div>
-              <span className="font-bold text-slate-900 hidden sm:inline">Suraj Ashok Limited</span>
+              <span className="font-bold text-slate-900 hidden sm:inline">{portal.fullName}</span>
             </div>
           </div>
 
@@ -246,6 +250,13 @@ function AppContent() {
 }
 
 function App() {
+  useEffect(() => {
+    const path = window.location.pathname.replace(/\/+$/, '');
+    if (path === '' || path === '/') {
+      window.location.replace('/admin');
+    }
+  }, []);
+
   return (
     <AuthProvider>
       <AppContent />
