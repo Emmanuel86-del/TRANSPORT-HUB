@@ -26,7 +26,7 @@ const MONITOR_COLORS = {
 const SUB_ACCOUNT_OPTIONS: { value: string; label: string }[] = [
   { value: 'all', label: 'ALL' },
   { value: 'mcl', label: 'MCL' },
-  { value: 'tarmal', label: 'TAHMAL' },
+  { value: 'tarmal', label: 'TARMAL' },
   { value: 'csl', label: 'CSL' },
   { value: 'mushroom', label: 'MUSHROOM' },
 ];
@@ -341,7 +341,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  // Map initialization
+  // Map initialization with invalidateSize fix
   useEffect(() => {
     if (!mapRef.current || !window.L || mapInstanceRef.current) return;
 
@@ -353,6 +353,15 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
     updateMapTiles();
     drawGeofences();
+
+    // Fix for blank map tiles: recalculate dimensions after render
+    const timer = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const updateMapTiles = () => {
@@ -394,7 +403,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m));
     markersRef.current = [];
 
-    // Use vehicle positions (approximate from geofence centers for demo)
     unitStatuses.forEach(u => {
       const hasActive = u.badges.some(b => b.color === MONITOR_COLORS.active || b.color === MONITOR_COLORS.inProgress);
       const isOverdue = u.badges.some(b => b.color === MONITOR_COLORS.offline && b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
@@ -405,7 +413,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       if (isOverdue) markerColor = MONITOR_COLORS.offline;
       else if (isWorkshop || isParked) markerColor = MONITOR_COLORS.workshop;
 
-      // Approximate position within a geofence
       const seed = u.vehicle.plate_number.charCodeAt(0) || 65;
       const lat = MOMBASA_CENTER[0] + ((seed % 10) - 5) * 0.005;
       const lng = MOMBASA_CENTER[1] + ((seed % 7) - 3) * 0.005;
@@ -422,7 +429,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       markersRef.current.push(marker);
     });
 
-    // Route lines for completed trips
     trips.filter(t => t.status === 'completed').forEach(t => {
       if (t.departure_time && t.arrival_time) {
         const seed = (t.vehicle?.plate_number || 'X').charCodeAt(0) || 65;
