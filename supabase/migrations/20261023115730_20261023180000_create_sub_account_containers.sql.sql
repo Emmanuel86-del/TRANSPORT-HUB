@@ -2,7 +2,7 @@
 # Create sub_account_containers table
 
 ## Purpose
-Stores container tracking records for each sub-account (MCL, TAHMAL, CSL, MUSHROOM).
+Stores container tracking records for each sub-account (MCL, TARMAL, CSL, MUSHROOM).
 Each container tracks shipping details, detention validity dates, assigned truck/trailer,
 status, and attached documents.
 
