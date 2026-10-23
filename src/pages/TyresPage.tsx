@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Disc, Plus, Edit, Search, Disc3, Package, TrendingUp, Archive, AlertTriangle } from 'lucide-react';
+import { Disc, Plus, Edit, Search, Disc3, Package, TrendingUp, Archive, AlertTriangle, History, X, Truck as TruckIcon, Clock } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
@@ -69,6 +69,33 @@ const TABS = [
 
 const fmtKES = (n: number | null) => n != null ? n.toLocaleString() : '—';
 
+type HistoryAction = 'fitted' | 'removed' | 'rotated' | 'retreaded' | 'repaired' | 'retired';
+
+const ACTION_LABELS: Record<HistoryAction, string> = {
+  fitted: 'Fitted', removed: 'Removed', rotated: 'Rotated',
+  retreaded: 'Retreaded', repaired: 'Repaired', retired: 'Retired',
+};
+const ACTION_COLORS: Record<HistoryAction, string> = {
+  fitted: 'text-blue-600', removed: 'text-slate-600', rotated: 'text-purple-600',
+  retreaded: 'text-amber-600', repaired: 'text-orange-600', retired: 'text-red-600',
+};
+const ACTION_BG: Record<HistoryAction, string> = {
+  fitted: 'bg-blue-500', removed: 'bg-slate-400', rotated: 'bg-purple-500',
+  retreaded: 'bg-amber-500', repaired: 'bg-orange-500', retired: 'bg-red-500',
+};
+const ACTION_STATUSES: Record<HistoryAction, string> = {
+  fitted: 'in_use', removed: 'in_store', rotated: 'in_use',
+  retreaded: 'in_store', repaired: 'in_store', retired: 'retired',
+};
+
+interface HistoryEntry {
+  id: string; tyre_id: string; action: string; vehicle_id: string | null;
+  position: string | null; action_date: string; km_at_action: number | null;
+  km_run_this_stint: number | null; reason: string | null; cost: number | null;
+  performed_by: string | null; notes: string | null; created_at: string;
+  vehicle?: { plate_number: string } | null;
+}
+
 export function TyresPage({ mclArea, portalColor, isMaster = false }: { mclArea: MCLArea | null; portalColor: string; isMaster?: boolean }) {
   const { showToast } = useToast();
   const { profile } = useAuth();
@@ -87,6 +114,15 @@ export function TyresPage({ mclArea, portalColor, isMaster = false }: { mclArea:
   const [filterTruck, setFilterTruck] = useState('');
   const [filterSubAccount, setFilterSubAccount] = useState('');
   const [filterSize, setFilterSize] = useState('');
+  const [historyTyre, setHistoryTyre] = useState<Tyre | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [logOpen, setLogOpen] = useState(false);
+  const [logForm, setLogForm] = useState({
+    action: 'fitted' as HistoryAction, action_date: new Date().toISOString().split('T')[0],
+    vehicle_id: '', position: '', km_at_action: null as number | null,
+    reason: '', cost: null as number | null, performed_by: '', notes: '',
+  });
 
   const emptyForm = {
     tyre_id: '', brand: '', size: '', serial_number: '', type: 'new' as string,
@@ -170,6 +206,71 @@ export function TyresPage({ mclArea, portalColor, isMaster = false }: { mclArea:
     setEditId(t.id);
     setTyreDocs(t.attachment_url ? [t.attachment_url] : []);
     setModalOpen(true);
+  };
+
+  const openHistory = async (tyre: Tyre) => {
+    setHistoryTyre(tyre); setHistoryLoading(true); setLogOpen(false);
+    const { data } = await supabase
+      .from('tyre_history').select('*, vehicle:vehicles(plate_number)')
+      .eq('tyre_id', tyre.id).order('action_date', { ascending: false }).order('created_at', { ascending: false });
+    setHistoryEntries((data as HistoryEntry[]) || []);
+    setHistoryLoading(false);
+  };
+
+  const openLog = () => {
+    setLogForm({
+      action: 'fitted', action_date: new Date().toISOString().split('T')[0],
+      vehicle_id: historyTyre?.current_vehicle_id || '',
+      position: historyTyre?.position || '', km_at_action: null,
+      reason: '', cost: null, performed_by: profile?.full_name || '', notes: '',
+    });
+    setLogOpen(true);
+  };
+
+  const saveLog = async () => {
+    if (!historyTyre) return;
+    const t = historyTyre;
+    let kmStint: number | null = null;
+    if (logForm.action === 'removed' && logForm.km_at_action != null && t.km_at_fitting != null) {
+      kmStint = Math.max(0, logForm.km_at_action - t.km_at_fitting);
+    }
+    const payload: any = {
+      tyre_id: t.id, action: logForm.action,
+      vehicle_id: logForm.vehicle_id || null, position: logForm.position || null,
+      action_date: logForm.action_date, km_at_action: logForm.km_at_action,
+      km_run_this_stint: kmStint, reason: logForm.reason || null,
+      cost: logForm.cost ?? 0, performed_by: logForm.performed_by || null,
+      notes: logForm.notes || null, sub_account: t.sub_account || subAccount,
+    };
+    const { error } = await supabase.from('tyre_history').insert(payload);
+    if (error) { showToast('Failed to log action: ' + error.message, 'error'); return; }
+
+    const newStatus = ACTION_STATUSES[logForm.action];
+    const upd: any = { status: newStatus };
+    if (logForm.action === 'fitted') {
+      upd.current_vehicle_id = logForm.vehicle_id || null;
+      upd.position = logForm.position || null;
+      upd.fitted_date = logForm.action_date;
+      upd.km_at_fitting = logForm.km_at_action;
+      upd.removed_date = null; upd.km_at_removal = null;
+    } else if (logForm.action === 'removed') {
+      upd.current_vehicle_id = null; upd.position = null;
+      upd.removed_date = logForm.action_date;
+      upd.km_at_removal = logForm.km_at_action;
+      upd.km_run = (t.km_run ?? 0) + (kmStint ?? 0);
+    } else if (logForm.action === 'retired') {
+      upd.current_vehicle_id = null; upd.position = null;
+      upd.removed_date = logForm.action_date; upd.km_at_removal = logForm.km_at_action;
+      if (kmStint != null) upd.km_run = (t.km_run ?? 0) + kmStint;
+    } else if (logForm.action === 'rotated') {
+      upd.current_vehicle_id = logForm.vehicle_id || null;
+      upd.position = logForm.position || null;
+    }
+    await supabase.from('tyres').update(upd).eq('id', t.id);
+    showToast(`Action logged: ${ACTION_LABELS[logForm.action]}`, 'success');
+    setLogOpen(false);
+    loadData();
+    openHistory({ ...t, ...upd });
   };
 
   const save = async () => {
@@ -291,7 +392,7 @@ export function TyresPage({ mclArea, portalColor, isMaster = false }: { mclArea:
                 const badge = STATUS_BADGES[t.status] || STATUS_BADGES.in_store;
                 const typeLabel = TYRE_TYPES.find(tt => tt.value === t.type)?.label || t.type;
                 return (
-                  <tr key={t.id} className="hover:bg-slate-50">
+                  <tr key={t.id} className="cursor-pointer hover:bg-slate-50" onClick={() => openHistory(t)}>
                     <td className="font-bold text-slate-800">{t.tyre_id}</td>
                     <td className="text-slate-700">{t.brand || '—'}</td>
                     <td className="text-slate-600">{t.size || '—'}</td>
@@ -304,10 +405,15 @@ export function TyresPage({ mclArea, portalColor, isMaster = false }: { mclArea:
                     <td className="text-slate-600">{t.km_run != null ? t.km_run.toLocaleString() : '—'}</td>
                     <td className="text-slate-600">{fmtKES(t.cost)}</td>
                     {isMaster && <td><span className="text-xs font-semibold uppercase text-slate-500">{t.sub_account}</span></td>}
-                    <td>
-                      <button onClick={() => openEdit(t)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <Edit className="h-4 w-4" />
-                      </button>
+                    <td onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openEdit(t)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => openHistory(t)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                          <History className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -418,6 +524,135 @@ export function TyresPage({ mclArea, portalColor, isMaster = false }: { mclArea:
           <button onClick={save} disabled={saving || !form.tyre_id} className="btn-primary">{saving ? 'Saving...' : editId ? 'Update Tyre' : 'Save Tyre'}</button>
         </div>
       </Modal>
+
+      {historyTyre && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => { setHistoryTyre(null); setLogOpen(false); }} />
+          <div className="relative w-full max-w-md bg-white shadow-2xl h-full overflow-y-auto animate-fade-in">
+            <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5 text-slate-500" />
+                <h3 className="text-base font-bold text-slate-900">Tyre History</h3>
+              </div>
+              <button onClick={() => { setHistoryTyre(null); setLogOpen(false); }} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGES[historyTyre.status]?.bg || 'bg-slate-100'} ${STATUS_BADGES[historyTyre.status]?.text || 'text-slate-700'}`}>
+                  {STATUS_BADGES[historyTyre.status]?.label || historyTyre.status}
+                </span>
+              </div>
+              <p className="text-lg font-bold text-slate-800">{historyTyre.tyre_id}</p>
+              <p className="text-sm text-slate-500">{historyTyre.brand || '—'} · {historyTyre.size || '—'}</p>
+              <p className="text-xs text-slate-400 mt-1">Serial: {historyTyre.serial_number || '—'} · Total KM: {historyTyre.km_run?.toLocaleString() || '0'}</p>
+              {historyTyre.vehicle?.plate_number && (
+                <p className="text-xs text-slate-500 mt-1 flex items-center gap-1"><TruckIcon className="h-3 w-3" /> {historyTyre.vehicle.plate_number} · {historyTyre.position || '—'}</p>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-b border-slate-100">
+              {!logOpen ? (
+                <button onClick={openLog} className="w-full flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90" style={{ background: portalColor }}>
+                  <Plus className="h-4 w-4" /> Log Action
+                </button>
+              ) : (
+                <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+                  <h4 className="text-sm font-semibold text-slate-700">Log New Action</h4>
+                  <div>
+                    <label className="label">Action</label>
+                    <select className="input text-sm" value={logForm.action} onChange={e => setLogForm({ ...logForm, action: e.target.value as HistoryAction })}>
+                      {(Object.keys(ACTION_LABELS) as HistoryAction[]).map(a => <option key={a} value={a}>{ACTION_LABELS[a]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Date</label>
+                    <input type="date" className="input text-sm" value={logForm.action_date} onChange={e => setLogForm({ ...logForm, action_date: e.target.value })} />
+                  </div>
+                  {(logForm.action === 'fitted' || logForm.action === 'rotated') && (<>
+                    <div>
+                      <label className="label">Truck</label>
+                      <select className="input text-sm" value={logForm.vehicle_id} onChange={e => setLogForm({ ...logForm, vehicle_id: e.target.value })}>
+                        <option value="">None</option>
+                        {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="label">Position</label>
+                      <select className="input text-sm" value={logForm.position} onChange={e => setLogForm({ ...logForm, position: e.target.value })}>
+                        <option value="">—</option>
+                        {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    </div>
+                  </>)}
+                  <div>
+                    <label className="label">KM at Action</label>
+                    <input type="number" step="1" className="input text-sm" value={logForm.km_at_action ?? ''} onChange={e => setLogForm({ ...logForm, km_at_action: e.target.value ? Number(e.target.value) : null })} />
+                  </div>
+                  <div>
+                    <label className="label">Reason</label>
+                    <input type="text" className="input text-sm" value={logForm.reason} onChange={e => setLogForm({ ...logForm, reason: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="label">Cost (KES)</label>
+                    <input type="number" step="0.01" className="input text-sm" value={logForm.cost ?? ''} onChange={e => setLogForm({ ...logForm, cost: e.target.value ? Number(e.target.value) : null })} />
+                  </div>
+                  <div>
+                    <label className="label">Performed By</label>
+                    <input type="text" className="input text-sm" value={logForm.performed_by} onChange={e => setLogForm({ ...logForm, performed_by: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="label">Notes</label>
+                    <input type="text" className="input text-sm" value={logForm.notes} onChange={e => setLogForm({ ...logForm, notes: e.target.value })} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setLogOpen(false)} className="btn-secondary text-sm flex-1">Cancel</button>
+                    <button onClick={saveLog} className="btn-primary text-sm flex-1">Log Action</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4">
+              {historyLoading ? (
+                <LoadingSpinner message="Loading history..." />
+              ) : historyEntries.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-8">No history entries yet. Log an action to start tracking.</p>
+              ) : (
+                <div className="space-y-3">
+                  {historyEntries.map((entry, idx) => {
+                    const act = entry.action as HistoryAction;
+                    return (
+                      <div key={entry.id} className="relative pl-6">
+                        {idx < historyEntries.length - 1 && <div className="absolute left-2 top-3 bottom-[-12px] w-px bg-slate-200" />}
+                        <div className={`absolute left-0 top-1.5 h-4 w-4 rounded-full border-2 border-white ${ACTION_BG[act] || 'bg-slate-400'}`} />
+                        <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-sm font-semibold ${ACTION_COLORS[act] || 'text-slate-600'}`}>{ACTION_LABELS[act] || entry.action}</span>
+                            <span className="text-xs text-slate-400">{entry.action_date}</span>
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap gap-3 text-xs text-slate-500">
+                            {entry.vehicle?.plate_number && <span className="flex items-center gap-1"><TruckIcon className="h-3 w-3" /> {entry.vehicle.plate_number}</span>}
+                            {entry.position && <span>Pos: {entry.position}</span>}
+                            {entry.km_at_action != null && <span>KM: {entry.km_at_action.toLocaleString()}</span>}
+                            {entry.km_run_this_stint != null && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {entry.km_run_this_stint.toLocaleString()} km this stint</span>}
+                            {entry.cost != null && entry.cost > 0 && <span>Cost: KES {entry.cost.toLocaleString()}</span>}
+                            {entry.performed_by && <span>by {entry.performed_by}</span>}
+                          </div>
+                          {entry.reason && <p className="mt-1 text-xs text-slate-500">Reason: {entry.reason}</p>}
+                          {entry.notes && <p className="mt-1 text-xs text-slate-500">{entry.notes}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

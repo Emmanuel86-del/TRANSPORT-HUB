@@ -68,6 +68,7 @@ const SUB_ACCOUNT_TABS: NavTab[] = [
   { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
   { id: 'tyres', label: 'Tyres', icon: 'Disc' },
   { id: 'containers', label: 'Containers', icon: 'Package' },
+  { id: 'compliance', label: 'Compliance', icon: 'ShieldCheck' },
   { id: 'reports', label: 'Reports', icon: 'FileText' },
 ];
 
