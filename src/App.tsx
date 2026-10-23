@@ -15,6 +15,7 @@ import { SubAccountTrips } from '@/pages/SubAccountTrips';
 import { SubAccountTallies } from '@/pages/SubAccountTallies';
 import { SubAccountFuel } from '@/pages/SubAccountFuel';
 import { SparePartsV2 } from '@/pages/SparePartsV2';
+import { TyresPage } from '@/pages/TyresPage';
 import { ContainersPage } from '@/pages/ContainersPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { MasterReportsPage } from '@/pages/MasterReportsPage';;
@@ -94,6 +95,7 @@ function AppContent() {
         case 'mushroom': return <SubAccountViewPage color={PORTALS.mushroom.color} name={PORTALS.mushroom.fullName} />;
         case 'users': return <Users />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
+        case 'tyres': return <TyresPage mclArea={null} portalColor={portal.color} isMaster />;
         case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} />;
         case 'compliance': return <CompliancePage color={portal.color} />;
         case 'reports': return <MasterReportsPage portalColor={portal.color} />;
@@ -109,6 +111,7 @@ function AppContent() {
       case 'fuel': return <SubAccountFuel mclArea={mclArea} portalColor={portal.color} />;
       case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
       case 'spare-parts': return <SparePartsV2 mclArea={mclArea} portalColor={portal.color} />;
+      case 'tyres': return <TyresPage mclArea={mclArea} portalColor={portal.color} />;
       case 'containers': return <ContainersPage mclArea={mclArea} portalColor={portal.color} />;
       case 'reports': return <ReportsPage mclArea={mclArea} portalColor={portal.color} />;
       default: return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} />;

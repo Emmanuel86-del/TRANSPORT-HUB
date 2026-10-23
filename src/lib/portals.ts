@@ -15,7 +15,7 @@ export type PortalConfig = {
 
 export type TabId =
   | 'live-monitor' | 'dashboard' | 'trips' | 'fuel' | 'tallies'
-  | 'spare-parts' | 'containers' | 'reports' | 'overview'
+  | 'spare-parts' | 'containers' | 'reports' | 'overview' | 'tyres'
   | 'mcl' | 'tarmal' | 'csl' | 'mushroom' | 'users' | 'compliance';
 
 export type NavTab = {
@@ -66,6 +66,7 @@ const SUB_ACCOUNT_TABS: NavTab[] = [
   { id: 'fuel', label: 'Fuel', icon: 'Fuel' },
   { id: 'tallies', label: 'Tallies', icon: 'Calculator' },
   { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
+  { id: 'tyres', label: 'Tyres', icon: 'Disc' },
   { id: 'containers', label: 'Containers', icon: 'Package' },
   { id: 'reports', label: 'Reports', icon: 'FileText' },
 ];
@@ -83,6 +84,7 @@ const MASTER_TABS: NavTab[] = [
   { id: 'mushroom', label: 'MUSHROOM', icon: 'Building2' },
   { id: 'users', label: 'Users', icon: 'Users' },
   { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
+  { id: 'tyres', label: 'Tyres', icon: 'Disc' },
   { id: 'containers', label: 'Containers', icon: 'Package' },
   { id: 'compliance', label: 'Compliance', icon: 'ShieldCheck' },
   { id: 'reports', label: 'Reports', icon: 'FileText' },
