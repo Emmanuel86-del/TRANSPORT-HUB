@@ -506,7 +506,7 @@ export function SparePartsV2({
               <label className="label">Sub-Account</label>
               <select className="input" value={form.sub_account} onChange={e => setForm({ ...form, sub_account: e.target.value })}>
                 <option value="mcl">MCL</option>
-                <option value="tahmal">TAHMAL</option>
+                <option value="tarmal">TARMAL</option>
                 <option value="csl">CSL</option>
                 <option value="mushroom">MUSHROOM</option>
                 <option value="master">Master</option>
