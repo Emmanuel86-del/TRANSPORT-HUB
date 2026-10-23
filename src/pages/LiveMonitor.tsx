@@ -53,7 +53,7 @@ type UnitStatus = {
   activeWorkRecord?: WorkRecord | null;
 };
 
-type CardKey = 'trips_today' | 'inside_mcl' | 'towards_mcl' | 'inside_workshop' | 'towards_ngamani' | 'parked_late' | 'stopped_outside' | 'offline' | 'latest_trip' | 'compliance_due';
+type CardKey = 'trips_today' | 'inside_site' | 'towards_site' | 'inside_workshop' | 'parked_late' | 'stopped_outside' | 'offline' | 'latest_trip' | 'compliance_due';
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${Math.round(minutes)}M`;
@@ -80,7 +80,6 @@ function isStale(lastUpdate: Date | null, now: Date): boolean {
   return (now.getTime() - lastUpdate.getTime()) > 5 * 60 * 1000;
 }
 
-// Loads Leaflet's CSS + JS on demand if window.L isn't already available.
 function loadLeaflet(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.L) return resolve();
@@ -129,6 +128,8 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const isMaster = profile?.sub_account === 'master' || profile?.sub_account === null;
   const effectiveFilter = forcedFilter ?? (isMaster ? subFilter : profile?.sub_account ?? 'all');
 
+  const siteName = effectiveFilter === 'all' ? 'DESTINATION' : effectiveFilter.toUpperCase();
+
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(new Date());
@@ -137,7 +138,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     return () => clearInterval(interval);
   }, []);
 
-  const todayStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
+  const todayStr = now.toLocaleDateString('en-CA');
 
   const loadData = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
@@ -217,25 +218,22 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
       const badges: { label: string; color: string; sublabel?: string }[] = [];
 
-      const mclTrip = inProgressTrips.find(t => (t.destination || t.to_location || '').includes('MCL'));
-      if (mclTrip) {
-        const since = parseTimeToMinutes(mclTrip.arrival_time || mclTrip.departure_time);
-        badges.push({ label: 'INSIDE MCL', color: MONITOR_COLORS.active, sublabel: since ? `since ${minutesToHHMM(since)}` : undefined });
-      }
+      const targetSearch = effectiveFilter === 'all' ? '' : effectiveFilter.toLowerCase();
 
-      const towardsMcl = inProgressTrips.find(t => (t.destination || t.to_location || '').includes('MCL') && !mclTrip);
-      if (towardsMcl && !mclTrip) {
-        badges.push({ label: 'TOWARDS MCL', color: MONITOR_COLORS.inProgress });
-      }
+      const atSiteTrip = inProgressTrips.find(t => {
+        const dest = (t.destination || t.to_location || '').toLowerCase();
+        return targetSearch ? dest.includes(targetSearch) : dest.length > 0;
+      });
 
-      const ngamaniTrip = inProgressTrips.find(t => (t.destination || t.to_location || '').toLowerCase().includes('ngamani'));
-      if (ngamaniTrip) {
-        badges.push({ label: 'INSIDE NGAMANI', color: MONITOR_COLORS.active });
-      }
-
-      const towardsNgamani = inProgressTrips.find(t => (t.destination || t.to_location || '').toLowerCase().includes('ngamani') && !ngamaniTrip);
-      if (towardsNgamani && !ngamaniTrip) {
-        badges.push({ label: 'TOWARDS NGAMANI', color: MONITOR_COLORS.inProgress });
+      if (atSiteTrip) {
+        const since = parseTimeToMinutes(atSiteTrip.arrival_time || atSiteTrip.departure_time);
+        badges.push({
+          label: `INSIDE ${siteName}`,
+          color: MONITOR_COLORS.active,
+          sublabel: since ? `since ${minutesToHHMM(since)}` : undefined,
+        });
+      } else if (inProgressTrips.length > 0) {
+        badges.push({ label: `TOWARDS ${siteName}`, color: MONITOR_COLORS.inProgress });
       }
 
       if (activeWork) {
@@ -255,10 +253,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
       if (vTrips.length === 0 && !activeWork) {
-        const lastActMin = parseTimeToMinutes(lastActivity);
-        if (!lastActMin || lastActMin < 360 || nowMinutes > 360) {
-          badges.push({ label: 'PARKED — LATE', color: MONITOR_COLORS.parkedLate, sublabel: 'No activity today' });
-        }
+        badges.push({ label: 'PARKED — LATE', color: MONITOR_COLORS.parkedLate, sublabel: 'No activity today' });
       }
 
       const stoppedTrip = inProgressTrips.find(t => {
@@ -290,32 +285,40 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         activeWorkRecord: activeWork || null,
       };
     });
-  }, [vehicles, trips, workRecords, now]);
+  }, [vehicles, trips, workRecords, now, effectiveFilter, siteName]);
 
   const cards = useMemo(() => {
     const completedToday = trips.filter(t => t.status === 'completed');
     const inProgress = trips.filter(t => t.status === 'in_progress' || t.status === 'started');
-    const insideMcl = inProgress.filter(t => (t.destination || t.to_location || '').includes('MCL'));
-    const towardsMcl = inProgress.filter(t => (t.destination || t.to_location || '').includes('MCL') && !insideMcl.includes(t));
+
+    const targetSearch = effectiveFilter === 'all' ? '' : effectiveFilter.toLowerCase();
+    const insideSite = inProgress.filter(t => {
+      const dest = (t.destination || t.to_location || '').toLowerCase();
+      return targetSearch ? dest.includes(targetSearch) : dest.length > 0;
+    });
+
+    const towardsSite = inProgress.filter(t => !insideSite.includes(t));
     const insideWorkshop = vehicles.filter(v => workRecords.some(w => w.vehicle_id === v.id && (w.status === 'in_progress' || w.status === 'pending')));
-    const towardsNgamani = inProgress.filter(t => (t.destination || t.to_location || '').toLowerCase().includes('ngamani'));
-    const nowMin = now.getHours() * 60 + now.getMinutes();
+
     const parkedLate = vehicles.filter(v => {
       const vTrips = trips.filter(t => t.vehicle_id === v.id);
       const vWork = workRecords.some(w => w.vehicle_id === v.id && (w.status === 'in_progress' || w.status === 'pending'));
-      if (vTrips.length > 0 || vWork) return false;
-      return true;
+      return vTrips.length === 0 && !vWork;
     });
+
+    const nowMin = now.getHours() * 60 + now.getMinutes();
     const stoppedOutside = inProgress.filter(t => {
       const dep = parseTimeToMinutes(t.departure_time);
       if (!dep) return false;
       return (nowMin - dep) > 120 && !t.arrival_time;
     });
+
     const offline = vehicles.filter(v => {
       const vTrips = trips.filter(t => t.vehicle_id === v.id);
       const vWork = workRecords.some(w => w.vehicle_id === v.id && (w.status === 'in_progress' || w.status === 'pending'));
       return vTrips.length === 0 && !vWork;
     });
+
     const latestTrip = completedToday.sort((a, b) => (b.arrival_time || '').localeCompare(a.arrival_time || ''))[0];
 
     const platesFor = (vehicleIds: string[]) => vehicles.filter(v => vehicleIds.includes(v.id)).map(v => v.plate_number);
@@ -323,30 +326,27 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
     return [
       { key: 'trips_today' as CardKey, label: 'TRIPS TODAY', count: completedToday.length, plates: platesFromTrips(completedToday), borderColor: MONITOR_COLORS.accent },
-      { key: 'inside_mcl' as CardKey, label: 'INSIDE MCL', count: insideMcl.length, plates: platesFromTrips(insideMcl), borderColor: MONITOR_COLORS.active },
-      { key: 'towards_mcl' as CardKey, label: 'TOWARDS MCL', count: towardsMcl.length, plates: platesFromTrips(towardsMcl), borderColor: MONITOR_COLORS.inProgress },
+      { key: 'inside_site' as CardKey, label: `INSIDE ${siteName}`, count: insideSite.length, plates: platesFromTrips(insideSite), borderColor: MONITOR_COLORS.active },
+      { key: 'towards_site' as CardKey, label: `TOWARDS ${siteName}`, count: towardsSite.length, plates: platesFromTrips(towardsSite), borderColor: MONITOR_COLORS.inProgress },
       { key: 'inside_workshop' as CardKey, label: 'INSIDE WORKSHOP', count: insideWorkshop.length, plates: insideWorkshop.map(v => v.plate_number), borderColor: MONITOR_COLORS.workshop },
-      { key: 'towards_ngamani' as CardKey, label: 'TOWARDS NGAMANI', count: towardsNgamani.length, plates: platesFromTrips(towardsNgamani), borderColor: MONITOR_COLORS.inProgress },
       { key: 'parked_late' as CardKey, label: 'PARKED LATE', count: parkedLate.length, plates: parkedLate.map(v => v.plate_number), borderColor: MONITOR_COLORS.parkedLate },
       { key: 'stopped_outside' as CardKey, label: 'STOPPED OUTSIDE', count: stoppedOutside.length, plates: platesFromTrips(stoppedOutside), borderColor: MONITOR_COLORS.parkedLate },
       { key: 'offline' as CardKey, label: 'OFFLINE', count: offline.length, plates: offline.map(v => v.plate_number), borderColor: MONITOR_COLORS.offline },
       { key: 'latest_trip' as CardKey, label: 'LATEST TRIP', count: null, plates: latestTrip ? [latestTrip.vehicle?.plate_number || '—'] : [], latestTrip, borderColor: MONITOR_COLORS.accent },
       { key: 'compliance_due' as CardKey, label: 'COMPLIANCE DUE', count: complianceDue.count, plates: complianceDue.labels, borderColor: MONITOR_COLORS.offline },
     ];
-  }, [trips, vehicles, workRecords, now, complianceDue]);
+  }, [trips, vehicles, workRecords, now, complianceDue, effectiveFilter, siteName]);
 
   const filteredUnits = useMemo(() => {
     if (!activeCard) return unitStatuses;
     return unitStatuses.filter(u => {
       if (activeCard === 'trips_today') return u.tripsToday.some(t => t.status === 'completed');
-      if (activeCard === 'inside_mcl') return u.badges.some(b => b.label === 'INSIDE MCL');
-      if (activeCard === 'towards_mcl') return u.badges.some(b => b.label === 'TOWARDS MCL');
+      if (activeCard === 'inside_site') return u.badges.some(b => b.label.includes('INSIDE'));
+      if (activeCard === 'towards_site') return u.badges.some(b => b.label.includes('TOWARDS'));
       if (activeCard === 'inside_workshop') return u.badges.some(b => b.label === 'INSIDE WORKSHOP');
-      if (activeCard === 'towards_ngamani') return u.badges.some(b => b.label === 'TOWARDS NGAMANI' || b.label === 'INSIDE NGAMANI');
       if (activeCard === 'parked_late') return u.badges.some(b => b.label.includes('PARKED'));
       if (activeCard === 'stopped_outside') return u.badges.some(b => b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
       if (activeCard === 'offline') return u.badges.some(b => b.label === 'NO SIGNAL');
-      if (activeCard === 'compliance_due') return false; // no unit filtering for compliance card
       return true;
     });
   }, [unitStatuses, activeCard]);
@@ -388,9 +388,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  // Leaflet map initialization.
-  // The map <div> only exists once `loading` is false (the skeleton is shown before that),
-  // so the map is created after loading finishes and torn down whenever loading starts again.
   useEffect(() => {
     if (loading) return;
 
@@ -408,7 +405,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
         updateMapLayers();
 
-        // Force recalculate tile panes multiple times to guarantee rendering
         [100, 300, 600, 1000].forEach(delay =>
           setTimeout(() => mapInstanceRef.current?.invalidateSize(true), delay)
         );
@@ -568,7 +564,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
   return (
     <div className="space-y-4 animate-fade-in" style={{ background: MONITOR_COLORS.bg, minHeight: '100vh', padding: '20px', color: '#fff', fontFamily: 'monospace' }}>
-      {/* Inline style overrides to fix Leaflet container sizing inside flexbox/grid containers */}
       <style>{`
         .leaflet-container {
           width: 100% !important;
@@ -638,7 +633,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
                 background: isActive ? `${MONITOR_COLORS.card}` : MONITOR_COLORS.card,
               }}
             >
-              <div className="text-xs font-bold mb-1" style={{ color: MONITOR_COLORS.textDim }}>{card.label}</div>
+              <div className="text-xs font-bold mb-1 truncate" style={{ color: MONITOR_COLORS.textDim }}>{card.label}</div>
               {card.count !== null ? (
                 <div className="text-3xl font-bold mb-1" style={{ color: card.borderColor === MONITOR_COLORS.offline ? MONITOR_COLORS.offline : MONITOR_COLORS.accent }}>{card.count}</div>
               ) : card.latestTrip ? (
