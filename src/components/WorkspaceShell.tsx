@@ -46,8 +46,10 @@ export function WorkspaceShell({
   const [universalModalOpen, setUniversalModalOpen] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
 
-  const tabs = getTabsForPortal(portal.slug);
+  const allTabs = getTabsForPortal(portal.slug);
   const userRole = profile?.role ?? 'employee';
+  const canViewLiveMonitor = userRole === 'manager' || userRole === 'corporate_admin';
+  const tabs = canViewLiveMonitor ? allTabs : allTabs.filter(t => t.id !== 'live-monitor');
 
   const navigate = (tab: TabId) => {
     onTabChange(tab);
@@ -102,6 +104,7 @@ export function WorkspaceShell({
           {tabs.map(tab => {
             const Icon = getIcon(tab.icon);
             const isActive = activeTab === tab.id;
+            const isLiveMonitor = tab.id === 'live-monitor';
             return (
               <button
                 key={tab.id}
@@ -112,6 +115,12 @@ export function WorkspaceShell({
               >
                 <Icon className="h-5 w-5 shrink-0" />
                 <span className="truncate">{tab.label}</span>
+                {isLiveMonitor && (
+                  <span className="relative ml-auto flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400" />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                  </span>
+                )}
               </button>
             );
           })}

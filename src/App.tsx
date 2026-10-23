@@ -21,9 +21,9 @@ import { MasterReportsPage } from '@/pages/MasterReportsPage';;
 
 // Placeholder pages
 import {
-  LiveMonitorPage,
   OverviewPage, CompliancePage, SubAccountViewPage,
 } from '@/pages/PlaceholderPages';
+import { LiveMonitor } from '@/pages/LiveMonitor';
 
 import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea } from '@/lib/portals';
 
@@ -86,7 +86,7 @@ function AppContent() {
     // Master portal tabs
     if (isMaster) {
       switch (activeTab) {
-        case 'live-monitor': return <LiveMonitorPage color={portal.color} />;
+        case 'live-monitor': return <LiveMonitor color={portal.color} />;
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'mcl': return <SubAccountViewPage color={PORTALS.mcl.color} name={PORTALS.mcl.fullName} />;
         case 'tarmal': return <SubAccountViewPage color={PORTALS.tarmal.color} name={PORTALS.tarmal.fullName} />;
@@ -103,7 +103,7 @@ function AppContent() {
 
     // Sub-account portal tabs
     switch (activeTab) {
-      case 'live-monitor': return <LiveMonitorPage color={portal.color} />;
+      case 'live-monitor': return <LiveMonitor color={portal.color} subAccountFilter={portal.slug} />;
       case 'dashboard': return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} />;
       case 'trips': return <SubAccountTrips mclArea={mclArea} portalColor={portal.color} />;
       case 'fuel': return <SubAccountFuel mclArea={mclArea} portalColor={portal.color} />;

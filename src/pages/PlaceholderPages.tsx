@@ -42,10 +42,6 @@ export function PlaceholderPage({
   );
 }
 
-export function LiveMonitorPage({ color }: { color: string }) {
-  return <PlaceholderPage title="Live Monitor" subtitle="Real-time fleet tracking and status" iconName="Activity" iconColor={color} />;
-}
-
 export function FuelPage({ color }: { color: string }) {
   return <PlaceholderPage title="Fuel Management" subtitle="Track fuel consumption and costs" iconName="Fuel" iconColor={color} />;
 }
