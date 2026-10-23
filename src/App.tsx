@@ -87,15 +87,19 @@ function AppContent() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const pathSlug = slugFromPath(window.location.pathname);
-  const portal = pathSlug ? (portalFromPath(window.location.pathname) ?? PORTALS.master) : PORTALS.master;
+  // Robust path and portal resolution handling trailing slashes
+  const cleanPathname = window.location.pathname.replace(/\/+$/, '').toLowerCase();
+  const pathSlug = slugFromPath(cleanPathname) || (cleanPathname === '' ? 'admin' : null);
+  const portal = pathSlug ? (portalFromPath(cleanPathname) ?? PORTALS.master) : PORTALS.master;
 
-  // Redirect unknown paths to /admin
+  // Only redirect if path is completely invalid (not a recognized portal slug and not root)
   useEffect(() => {
-    if (!pathSlug) {
+    const validSlugs = ['admin', 'mcl', 'tahmal', 'csl', 'mushroom'];
+    const currentSlug = cleanPathname.split('/')[1] || '';
+    if (currentSlug && !validSlugs.includes(currentSlug)) {
       window.location.replace('/admin');
     }
-  }, [pathSlug]);
+  }, [cleanPathname]);
 
   if (loading) {
     return (
@@ -260,7 +264,7 @@ function AppContent() {
 function App() {
   useEffect(() => {
     const path = window.location.pathname.replace(/\/+$/, '');
-    if (path === '' || path === '/') {
+    if (path === '') {
       window.location.replace('/admin');
     }
   }, []);
