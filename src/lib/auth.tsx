@@ -33,11 +33,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
-      const { data, error } = await supabase
+      const profilePromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+      );
+
+      const { data, error } = (await Promise.race([profilePromise, timeoutPromise])) as any;
 
       if (error) {
         console.error('Error fetching profile:', error);
@@ -54,12 +60,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setAuthError(null);
 
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
+
     try {
       const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
         setAuthError(sessionError.message);
         setLoading(false);
+        clearTimeout(safetyTimer);
         return;
       }
 
@@ -77,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       setAuthError('Connection error. Please try again.');
     } finally {
+      clearTimeout(safetyTimer);
       setLoading(false);
     }
   }, [fetchProfile]);
