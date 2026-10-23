@@ -54,12 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setAuthError(null);
 
+    // Safety fallback timer to prevent infinite loading if Supabase stalls
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+
     try {
       const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
         setAuthError(sessionError.message);
         setLoading(false);
+        clearTimeout(safetyTimer);
         return;
       }
 
@@ -77,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       setAuthError('Connection error. Please try again.');
     } finally {
+      clearTimeout(safetyTimer);
       setLoading(false);
     }
   }, [fetchProfile]);
@@ -87,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initAuth();
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
