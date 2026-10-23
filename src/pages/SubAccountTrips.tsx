@@ -51,7 +51,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   const { showToast } = useToast();
   const { profile } = useAuth();
   const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
-  const isTahmal = subAccount === 'tarmal';
+  const isTarmal = subAccount === 'tarmal';
   const isMCL = subAccount === 'mcl';
 
   const [loading, setLoading] = useState(true);
