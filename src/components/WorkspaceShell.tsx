@@ -50,7 +50,6 @@ export function WorkspaceShell({
   const userRole = profile?.role ?? 'employee';
   const tabs = allTabs;
 
-  // Handle tab navigation and update the browser URL bar instantly
   const navigate = (tab: TabId) => {
     onTabChange(tab);
     setSidebarOpen(false);
@@ -63,7 +62,6 @@ export function WorkspaceShell({
     window.history.pushState(null, '', newPath);
   };
 
-  // Sync state if user uses browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
       const segments = window.location.pathname.split('/').filter(Boolean);
@@ -266,6 +264,3 @@ export function WorkspaceShell({
     </div>
   );
 }
-```[cite: 14]
-
-Once you update and commit this file[cite: 14], clicking any sidebar item will immediately reflect its name/path in the browser URL bar (e.g. `/csl/fuel`), and using the browser's back and forward buttons will switch pages seamlessly[cite: 14].
