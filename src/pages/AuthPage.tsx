@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { PortalConfig, SubAccount, PORTALS, pathForSlug } from '@/lib/portals';
+import { PortalConfig, SubAccount, PORTALS } from '@/lib/portals';
 import { Truck, Lock, Mail, User, ArrowRight, AlertCircle } from 'lucide-react';
 
 export function AuthPage({ portal }: { portal: PortalConfig }) {
@@ -23,22 +23,18 @@ export function AuthPage({ portal }: { portal: PortalConfig }) {
         const { error } = await signUp(email, password, fullName, subAccount);
         if (error) {
           setLocalError(error);
-          setLoading(false);
         } else {
-          // Switch to sign in after successful signup
           setIsSignUp(false);
-          setLoading(false);
         }
       } else {
         const { error } = await signIn(email, password);
         if (error) {
           setLocalError(error);
-          setLoading(false);
         }
-        // If successful, auth state change / redirect will occur
       }
     } catch (err: any) {
       setLocalError(err.message || 'An unexpected error occurred');
+    } finally {
       setLoading(false);
     }
   };
