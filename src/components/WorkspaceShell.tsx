@@ -5,7 +5,7 @@ import {
   ChevronDown, Building2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { PortalConfig, TabId, SubAccount, PORTALS, MCLArea, getTabsForPortal } from '@/lib/portals';
+import { PortalConfig, TabId, SubAccount, PORTALS, MCLArea, getTabsForPortal, pathForSlug } from '@/lib/portals';
 import { useToast } from '@/components/Toast';
 import { UserRole } from '@/types';
 
@@ -51,6 +51,7 @@ export function WorkspaceShell({
   const tabs = allTabs;
 
   const navigate = (tab: TabId) => {
+    if (tab === activeTab) return; // Prevent redundant state triggers
     onTabChange(tab);
     setSidebarOpen(false);
 
@@ -59,11 +60,18 @@ export function WorkspaceShell({
       ? basePath
       : `${basePath}/${tab}`;
     
-    window.history.pushState(null, '', newPath);
+    // Update URL silently without triggering re-auth or full reloads
+    if (window.location.pathname !== newPath) {
+      window.history.replaceState({ tab }, '', newPath);
+    }
   };
 
   useEffect(() => {
-    const handlePopState = () => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state?.tab) {
+        onTabChange(e.state.tab);
+        return;
+      }
       const segments = window.location.pathname.split('/').filter(Boolean);
       const tabSlug = segments[1] as TabId;
       if (tabSlug) {
@@ -75,7 +83,7 @@ export function WorkspaceShell({
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [onTabChange, portal.slug]);
+  }, [onTabChange]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -204,8 +212,8 @@ export function WorkspaceShell({
                           <button
                             key={slug}
                             onClick={() => {
-                              onTabChange(slug as TabId);
                               setShowSwitcher(false);
+                              window.location.href = pathForSlug(slug);
                             }}
                             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
                           >
