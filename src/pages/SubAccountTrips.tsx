@@ -182,7 +182,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     if (isMCL && mclArea) {
       payload.mcl_area_id = mclArea;
     }
-    // TAHMAL: auto-calc distance
+    // TARMAL: auto-calc distance
     if (isTahmal && payload.start_odometer != null && payload.end_odometer != null) {
       payload.distance_km = payload.end_odometer - payload.start_odometer;
     }
