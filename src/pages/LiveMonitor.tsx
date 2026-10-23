@@ -330,7 +330,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  // Leaflet Map Initialization
+  // Leaflet Map Initialization with Forced Container Sizing & InvalidateSize loops
   useEffect(() => {
     let timer: any;
     let isMounted = true;
@@ -339,7 +339,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       if (!mapRef.current || !isMounted) return;
 
       if (!window.L) {
-        timer = setTimeout(initMap, 150);
+        timer = setTimeout(initMap, 100);
         return;
       }
 
@@ -353,11 +353,14 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
       updateMapLayers();
 
-      setTimeout(() => {
-        if (mapInstanceRef.current) {
-          mapInstanceRef.current.invalidateSize();
-        }
-      }, 300);
+      // Force recalculate tile panes multiple times to guarantee rendering
+      [100, 300, 600, 1000].forEach(delay => {
+        setTimeout(() => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize(true);
+          }
+        }, delay);
+      });
     };
 
     initMap();
@@ -382,13 +385,12 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
       : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-    const attribution = mapToggle === 'satellite'
-      ? 'Esri'
-      : 'OpenStreetMap';
+    const attribution = mapToggle === 'satellite' ? 'Esri' : 'OpenStreetMap';
 
     const tileLayer = window.L.tileLayer(tileUrl, {
       attribution,
       maxZoom: 19,
+      subdomains: 'abc',
     });
     tileLayer.addTo(mapInstanceRef.current);
     layersRef.current.push(tileLayer);
@@ -443,6 +445,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   useEffect(() => {
     if (mapInstanceRef.current) {
       updateMapLayers();
+      mapInstanceRef.current.invalidateSize(true);
     }
   }, [mapToggle]);
 
@@ -497,6 +500,16 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
   return (
     <div className="space-y-4 animate-fade-in" style={{ background: MONITOR_COLORS.bg, minHeight: '100vh', padding: '20px', color: '#fff', fontFamily: 'monospace' }}>
+      {/* Inline style overrides to fix Leaflet container sizing inside flexbox/grid containers */}
+      <style>{`
+        .leaflet-container {
+          width: 100% !important;
+          height: 100% !important;
+          background: #120505 !important;
+          z-index: 1;
+        }
+      `}</style>
+
       {/* SECTION 1: STICKY LIVE HEADER */}
       <div className="sticky top-0 z-10 rounded-xl p-4 shadow-md" style={{ ...panelStyle, borderLeft: `3px solid ${MONITOR_COLORS.accent}` }}>
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -761,7 +774,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
           </div>
         </div>
 
-        {/* SECTION 7: LEAFLET LIVE MAP (SATELLITE & MAP MODES) */}
+        {/* SECTION 7: LEAFLET LIVE MAP CONTAINER */}
         <div style={panelStyle} className="lg:col-span-2 shadow-sm">
           <div className="flex items-center justify-between" style={headerStyle}>
             <span>LIVE MAP · {unitStatuses.length} UNITS TRACKED</span>
@@ -774,7 +787,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
             </button>
           </div>
           
-          <div ref={mapRef} style={{ height: '420px', width: '100%', background: MONITOR_COLORS.bg }} />
+          <div style={{ height: '420px', width: '100%', position: 'relative' }}>
+            <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
+          </div>
 
           <div className="flex flex-wrap items-center gap-4 px-4 py-2 text-xs" style={{ borderTop: `1px solid ${MONITOR_COLORS.border}` }}>
             {[
