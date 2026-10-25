@@ -1,14 +1,14 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
-  FileText, ChevronDown, ChevronRight, Download, Calendar, Truck as TruckIcon,
-  Route, Fuel, Calculator, Wallet, Wrench, Package, ShieldCheck, AlertTriangle,
-  CheckCircle, Clock, TrendingUp, RotateCw,
+  FileText, ChevronDown, ChevronRight, Download, Calendar,
+  Route, Fuel, Calculator, Wallet, Wrench, Package, ShieldCheck,
+  CheckCircle, RotateCw,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { getSubAccountFilter, supabase } from '@/lib/supabase';
 import { SubAccount, MCLArea, PORTALS } from '@/lib/portals';
 import {
-  WeekRange, getLastWeekRange, getCurrentWeekRange, isSaturday, isMonthStart,
+  getLastWeekRange, getCurrentWeekRange, isSaturday, isMonthStart,
   fmtDate, toISODate, isWeeklyReviewed, markWeeklyReviewed,
   ReportFilters,
 } from '@/lib/report-utils';
@@ -100,8 +100,8 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
   const [tyresData, setTyresData] = useState<any[]>([]);
   const { data, loading } = useReportData(filters, false);
 
-  // Load vehicles and tyre data for analytics
-  useMemo(() => {
+  // Load vehicles and tyre data properly using useEffect
+  useEffect(() => {
     supabase.from('vehicles').select('id, plate_number').order('plate_number').then((r: any) => {
       setVehicles(r.data || []);
     });
@@ -434,7 +434,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
       </div>
 
       {/* Report Sections */}
-      {/* 1. Trips */}
       <CollapsibleSection title={`1. Trips Summary (${trips.length} trips)`} icon={<Route className="h-4 w-4" />}>
         <StatRow label="Total Trips" value={String(trips.length)} highlight="green" />
         <StatRow label="Total Distance" value={`${totalDistance.toLocaleString()} km`} />
@@ -444,7 +443,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         <SubTable headers={['Driver', 'Trips', 'Mileage Pay']} rows={tripsByDriver.map(d => [d.name, d.count, `KES ${d.mileage.toLocaleString()}`])} />
       </CollapsibleSection>
 
-      {/* 2. Fuel */}
       <CollapsibleSection title="2. Fuel Report" icon={<Fuel className="h-4 w-4" />}>
         <StatRow label="Total Expected" value={`${totalFuelExp.toLocaleString()} L`} />
         <StatRow label="Total Actual" value={`${totalFuelAct.toLocaleString()} L`} />
@@ -454,7 +452,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         <SubTable headers={['Truck', 'Expected (L)', 'Actual (L)']} rows={fuelByTruck.map(f => [f.plate, f.exp.toLocaleString(), f.act.toLocaleString()])} />
       </CollapsibleSection>
 
-      {/* 3. Tallies */}
       <CollapsibleSection title="3. Tallies Report" icon={<Calculator className="h-4 w-4" />}>
         <StatRow label="Total Net Tallage" value={totalNetTallage.toLocaleString()} highlight="green" />
         <p className="text-xs font-semibold text-slate-500 mt-3 mb-1">By Truck</p>
@@ -467,7 +464,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         )}
       </CollapsibleSection>
 
-      {/* 4. Tyres */}
       <CollapsibleSection title="4. Tyres Report" icon={<RotateCw className="h-4 w-4" />}>
         <StatRow label="Average KM per Tyre (Lifecycle)" value={`${avgTyreKm.toLocaleString()} KM`} highlight="green" />
         <StatRow label="Tyres Fitted This Month" value={String(fittedThisMonth)} />
@@ -482,7 +478,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         )}
       </CollapsibleSection>
 
-      {/* 5. Mileage */}
       <CollapsibleSection title="5. Mileage Payments" icon={<Wallet className="h-4 w-4" />}>
         <StatRow label="Total Mileage" value={`KES ${totalMileage.toLocaleString()}`} highlight="green" />
         <p className="text-xs font-semibold text-slate-500 mt-3 mb-1">By Driver</p>
@@ -491,7 +486,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         <SubTable headers={['Route', 'Amount']} rows={mileageByRoute.map(([r, a]) => [r, `KES ${a.toLocaleString()}`])} />
       </CollapsibleSection>
 
-      {/* 6. Spare Parts */}
       <CollapsibleSection title="6. Spare Parts" icon={<Wrench className="h-4 w-4" />}>
         <StatRow label="In Use" value={String(partsInUse.length)} />
         <StatRow label="In Store" value={String(partsInStore.length)} />
@@ -502,7 +496,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         )}
       </CollapsibleSection>
 
-      {/* 7. Containers */}
       <CollapsibleSection title="7. Containers" icon={<Package className="h-4 w-4" />}>
         <StatRow label="Active" value={String(contActive.length)} />
         <StatRow label="Returned" value={String(contReturned.length)} />
@@ -513,7 +506,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         )}
       </CollapsibleSection>
 
-      {/* 8. Compliance */}
       <CollapsibleSection title="8. Compliance" icon={<ShieldCheck className="h-4 w-4" />}>
         <StatRow label="Expiring This Month" value={String(complianceExpiring.length)} highlight={complianceExpiring.length > 0 ? 'amber' : 'green'} />
         <StatRow label="Already Expired" value={String(complianceExpired.length)} highlight={complianceExpired.length > 0 ? 'red' : 'green'} />
