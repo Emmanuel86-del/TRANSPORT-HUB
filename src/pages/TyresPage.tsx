@@ -3,7 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
 import { useToast } from '@/components/Toast';
-import { RotateCw, ShieldAlert, Truck, X } from 'lucide-react';
+import { RotateCw, Truck, X, Download, Upload } from 'lucide-react';
+import { downloadExcelTemplate } from '@/lib/excelTemplates';
+import { UploadModal } from '@/components/UploadModal';
 
 type Tyre = {
   id: string;
@@ -41,6 +43,7 @@ export function TyresPage({ color, subAccountFilter }: { color: string; subAccou
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [rotatingVehicle, setRotatingVehicle] = useState<Vehicle | null>(null);
   const [rotationMap, setRotationMap] = useState<Record<string, string>>({});
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
   const effectiveFilter = subAccountFilter ?? (profile?.sub_account === 'master' ? 'all' : profile?.sub_account ?? 'all');
 
@@ -131,19 +134,36 @@ export function TyresPage({ color, subAccountFilter }: { color: string; subAccou
         iconColor={color}
       />
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200 pb-2">
-        {(['active', 'inventory', 'retired'] as const).map(tab => (
+      {/* Tabs & Action Buttons */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-3">
+        <div className="flex gap-2">
+          {(['active', 'inventory', 'retired'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition-colors ${
+                activeTab === tab ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {tab} Tyres
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-semibold rounded-lg capitalize transition-colors ${
-              activeTab === tab ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-            }`}
+            onClick={() => downloadExcelTemplate('tyres')}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg shadow-sm"
           >
-            {tab} Tyres
+            <Download className="h-3.5 w-3.5 text-slate-500" /> Download Template
           </button>
-        ))}
+          <button
+            onClick={() => setIsUploadOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg shadow-sm"
+            style={{ background: color }}
+          >
+            <Upload className="h-3.5 w-3.5" /> Upload Tyres
+          </button>
+        </div>
       </div>
 
       {activeTab === 'active' && (
@@ -222,6 +242,15 @@ export function TyresPage({ color, subAccountFilter }: { color: string; subAccou
           </div>
         </div>
       )}
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        tableName="tyres"
+        subAccount={effectiveFilter === 'all' ? 'mcl' : effectiveFilter}
+        onSuccess={loadData}
+      />
     </div>
   );
 }
