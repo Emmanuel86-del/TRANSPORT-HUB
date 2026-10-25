@@ -1,7 +1,5 @@
 export type SubAccount = 'mcl' | 'tarmal' | 'csl' | 'mushroom' | 'master';
 
-export type MCLArea = 'vipingo' | 'ngamani' | 'tezo' | 'roka';
-
 export type PortalConfig = {
   slug: SubAccount;
   name: string;
@@ -50,13 +48,6 @@ export const PORTALS: Record<SubAccount, PortalConfig> = {
     color: '#7E1219', colorLight: '#B91C1C', colorDark: '#5C0E14',
     bgGradient: 'from-red-800 to-red-950', accentClass: 'red',
   },
-};
-
-export const MCL_AREAS: Record<MCLArea, { name: string; color: string; icon: string }> = {
-  vipingo: { name: 'Vipingo', color: '#2563EB', icon: 'MapPin' },
-  ngamani: { name: 'Ngamani', color: '#0891B2', icon: 'MapPin' },
-  tezo: { name: 'Tezo', color: '#7C3AED', icon: 'MapPin' },
-  roka: { name: 'Roka', color: '#DB2777', icon: 'MapPin' },
 };
 
 const SUB_ACCOUNT_TABS: NavTab[] = [
