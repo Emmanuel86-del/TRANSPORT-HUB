@@ -31,13 +31,50 @@ const SUB_ACCOUNT_OPTIONS: { value: string; label: string }[] = [
   { value: 'mushroom', label: 'MUSHROOM' },
 ];
 
-const GEOFENCES = [
-  { name: 'MCL / Mikindani', color: '#FFEB3B', coords: [[-3.9670, 39.7330], [-3.9670, 39.7600], [-3.9500, 39.7600], [-3.9500, 39.7330]] },
-  { name: 'Ngamani New', color: '#4CAF50', coords: [[-3.9800, 39.7500], [-3.9800, 39.7800], [-3.9650, 39.7800], [-3.9650, 39.7500]] },
-  { name: 'Workshop', color: '#FF9800', coords: [[-3.9550, 39.7450], [-3.9550, 39.7620], [-3.9420, 39.7620], [-3.9420, 39.7450]] },
-];
-
-const MOMBASA_CENTER: [number, number] = [-3.9630, 39.7500];
+// Define Sub-Account Centers & Map Coordinates
+const PORTAL_LOCATIONS: Record<string, { center: [number, number]; zoom: number; geofences: any[] }> = {
+  mcl: {
+    center: [-3.9630, 39.7500],
+    zoom: 13,
+    geofences: [
+      { name: 'MCL / Mikindani', color: '#FFEB3B', coords: [[-3.9670, 39.7330], [-3.9670, 39.7600], [-3.9500, 39.7600], [-3.9500, 39.7330]] },
+      { name: 'Ngamani New', color: '#4CAF50', coords: [[-3.9800, 39.7500], [-3.9800, 39.7800], [-3.9650, 39.7800], [-3.9650, 39.7500]] },
+      { name: 'MCL Workshop', color: '#FF9800', coords: [[-3.9550, 39.7450], [-3.9550, 39.7620], [-3.9420, 39.7620], [-3.9420, 39.7450]] },
+    ],
+  },
+  tarmal: {
+    center: [-4.0450, 39.6680],
+    zoom: 14,
+    geofences: [
+      { name: 'TARMAL Steel Hub', color: '#4CAF50', coords: [[-4.0500, 39.6630], [-4.0500, 39.6730], [-4.0400, 39.6730], [-4.0400, 39.6630]] },
+      { name: 'Tarmal Depot', color: '#FFEB3B', coords: [[-4.0380, 39.6600], [-4.0380, 39.6700], [-4.0300, 39.6700], [-4.0300, 39.6600]] },
+    ],
+  },
+  csl: {
+    center: [-4.0550, 39.6450],
+    zoom: 14,
+    geofences: [
+      { name: 'CSL Container Terminal', color: '#00E5FF', coords: [[-4.0620, 39.6380], [-4.0620, 39.6520], [-4.0480, 39.6520], [-4.0480, 39.6380]] },
+      { name: 'Kipevu Berth Area', color: '#FF9800', coords: [[-4.0450, 39.6300], [-4.0450, 39.6420], [-4.0380, 39.6420], [-4.0380, 39.6300]] },
+    ],
+  },
+  mushroom: {
+    center: [-3.9500, 39.6800],
+    zoom: 14,
+    geofences: [
+      { name: 'MUSHROOM Farm & Plant', color: '#9C27B0', coords: [[-3.9560, 39.6740], [-3.9560, 39.6860], [-3.9440, 39.6860], [-3.9440, 39.6740]] },
+    ],
+  },
+  all: {
+    center: [-4.0000, 39.6700],
+    zoom: 11,
+    geofences: [
+      { name: 'MCL Area', color: '#FFEB3B', coords: [[-3.9670, 39.7330], [-3.9670, 39.7600], [-3.9500, 39.7600], [-3.9500, 39.7330]] },
+      { name: 'CSL Area', color: '#00E5FF', coords: [[-4.0620, 39.6380], [-4.0620, 39.6520], [-4.0480, 39.6520], [-4.0480, 39.6380]] },
+      { name: 'TARMAL Area', color: '#4CAF50', coords: [[-4.0500, 39.6630], [-4.0500, 39.6730], [-4.0400, 39.6730], [-4.0400, 39.6630]] },
+    ],
+  },
+};
 
 type TripWithRelations = Trip & { vehicle?: Vehicle | null; driver?: Driver | null };
 type WorkRecordWithVehicle = WorkRecord & { vehicle?: Vehicle | null };
@@ -127,6 +164,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
   const isMaster = profile?.sub_account === 'master' || profile?.sub_account === null;
   const effectiveFilter = forcedFilter ?? (isMaster ? subFilter : profile?.sub_account ?? 'all');
+  const currentConfig = PORTAL_LOCATIONS[effectiveFilter.toLowerCase()] || PORTAL_LOCATIONS.all;
 
   const siteName = effectiveFilter === 'all' ? 'DESTINATION' : effectiveFilter.toUpperCase();
 
@@ -217,7 +255,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       const activeWork = vWorkRecords.find(w => w.status === 'in_progress' || w.status === 'pending');
 
       const badges: { label: string; color: string; sublabel?: string }[] = [];
-
       const targetSearch = effectiveFilter === 'all' ? '' : effectiveFilter.toLowerCase();
 
       const atSiteTrip = inProgressTrips.find(t => {
@@ -398,8 +435,8 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         if (cancelled || !mapRef.current || mapInstanceRef.current) return;
 
         mapInstanceRef.current = window.L.map(mapRef.current, {
-          center: MOMBASA_CENTER,
-          zoom: 13,
+          center: currentConfig.center,
+          zoom: currentConfig.zoom,
           zoomControl: true,
         });
 
@@ -420,7 +457,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       layersRef.current = [];
       markersRef.current = [];
     };
-  }, [loading]);
+  }, [loading, effectiveFilter]);
 
   const updateMapLayers = () => {
     if (!mapInstanceRef.current || !window.L) return;
@@ -442,7 +479,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     tileLayer.addTo(mapInstanceRef.current);
     layersRef.current.push(tileLayer);
 
-    GEOFENCES.forEach(gf => {
+    currentConfig.geofences.forEach(gf => {
       const polygon = window.L.polygon(gf.coords, {
         color: gf.color,
         weight: 2,
@@ -463,6 +500,8 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m));
     markersRef.current = [];
 
+    const center = currentConfig.center;
+
     unitStatuses.forEach(u => {
       const isOverdue = u.badges.some(b => b.color === MONITOR_COLORS.offline && b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
       const isWorkshop = u.badges.some(b => b.label === 'INSIDE WORKSHOP');
@@ -473,8 +512,8 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       else if (isWorkshop || isParked) markerColor = MONITOR_COLORS.workshop;
 
       const seed = u.vehicle.plate_number.charCodeAt(0) || 65;
-      const lat = MOMBASA_CENTER[0] + ((seed % 10) - 5) * 0.003;
-      const lng = MOMBASA_CENTER[1] + ((seed % 7) - 3) * 0.003;
+      const lat = center[0] + ((seed % 10) - 5) * 0.003;
+      const lng = center[1] + ((seed % 7) - 3) * 0.003;
 
       const marker = window.L.circleMarker([lat, lng], {
         radius: 9,
@@ -489,8 +528,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
   };
 
+  // Reset view to the current sub-account's dynamic center and zoom level
   const resetMapView = () => {
-    mapInstanceRef.current?.setView(MOMBASA_CENTER, 13);
+    mapInstanceRef.current?.setView(currentConfig.center, currentConfig.zoom);
   };
 
   const fitToUnits = () => {
@@ -505,7 +545,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       updateMapLayers();
       mapInstanceRef.current.invalidateSize(true);
     }
-  }, [mapToggle]);
+  }, [mapToggle, effectiveFilter]);
 
   useEffect(() => {
     if (mapInstanceRef.current && !loading) {
@@ -840,25 +880,25 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
         {/* SECTION 7: LEAFLET LIVE MAP CONTAINER */}
         <div style={panelStyle} className="lg:col-span-2 shadow-sm">
           <div className="flex items-center justify-between" style={headerStyle}>
-            <span>LIVE MAP · {unitStatuses.length} UNITS TRACKED</span>
+            <span>LIVE MAP · {unitStatuses.length} UNITS TRACKED ({siteName})</span>
             <div className="flex items-center gap-2">
               <button
                 onClick={fitToUnits}
-                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors"
+                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors hover:opacity-80"
                 style={mapButtonStyle}
               >
                 FIT UNITS
               </button>
               <button
                 onClick={resetMapView}
-                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors"
+                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors hover:opacity-80"
                 style={mapButtonStyle}
               >
                 RESET VIEW
               </button>
               <button
                 onClick={() => setMapToggle(prev => (prev === 'map' ? 'satellite' : 'map'))}
-                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors"
+                className="rounded-lg px-3 py-1 text-xs font-bold transition-colors hover:opacity-80"
                 style={mapButtonStyle}
               >
                 VIEW: {mapToggle.toUpperCase()}
