@@ -1,5 +1,14 @@
 export type SubAccount = 'mcl' | 'tarmal' | 'csl' | 'mushroom' | 'master';
 
+// Legacy stub exports to maintain backward compatibility during builds
+export type MCLArea = 'vipingo' | 'ngamani' | 'tezo' | 'roka';
+export const MCL_AREAS: Record<string, { name: string; color: string; icon: string }> = {
+  vipingo: { name: 'Vipingo', color: '#2563EB', icon: 'MapPin' },
+  ngamani: { name: 'Ngamani', color: '#0891B2', icon: 'MapPin' },
+  tezo: { name: 'Tezo', color: '#7C3AED', icon: 'MapPin' },
+  roka: { name: 'Roka', color: '#DB2777', icon: 'MapPin' },
+};
+
 export type PortalConfig = {
   slug: SubAccount;
   name: string;
