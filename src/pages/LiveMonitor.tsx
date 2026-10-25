@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'rea
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { Trip, Vehicle, Driver, WorkRecord } from '@/types';
-import { RefreshCw, XCircle } from 'lucide-react';
+import { RefreshCw, XCircle, Search } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 declare global {
@@ -157,9 +157,13 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [mapToggle, setMapToggle] = useState<'satellite' | 'map'>('satellite');
   const [complianceDue, setComplianceDue] = useState<{ labels: string[]; count: number }>({ labels: [], count: 0 });
 
+  // Map Search States
+  const [mapSearchQuery, setMapSearchQuery] = useState('');
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+
   const mapRef = useRef<any>(null);
   const mapInstanceRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const markersRef = useRef<{ marker: any; plate: string }[]>([]);
   const layersRef = useRef<any[]>([]);
 
   const isMaster = profile?.sub_account === 'master' || profile?.sub_account === null;
@@ -497,7 +501,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const drawMarkers = () => {
     if (!mapInstanceRef.current || !window.L) return;
 
-    markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m));
+    markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m.marker));
     markersRef.current = [];
 
     const center = currentConfig.center;
@@ -524,7 +528,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       });
       marker.bindPopup(`<b>Unit: ${u.vehicle.plate_number}</b><br>Driver: ${u.currentDriver?.name || '—'}<br>Status: ${u.badges.map(b => b.label).join(', ') || 'Idle'}`);
       marker.addTo(mapInstanceRef.current);
-      markersRef.current.push(marker);
+      markersRef.current.push({ marker, plate: u.vehicle.plate_number.toLowerCase() });
     });
   };
 
@@ -536,8 +540,43 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const fitToUnits = () => {
     const map = mapInstanceRef.current;
     if (!map || !window.L || markersRef.current.length === 0) return;
-    const group = window.L.featureGroup(markersRef.current);
+    const group = window.L.featureGroup(markersRef.current.map(m => m.marker));
     map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 15 });
+  };
+
+  // Search local fleet units or world locations
+  const handleMapSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mapSearchQuery.trim() || !mapInstanceRef.current) return;
+
+    const query = mapSearchQuery.trim().toLowerCase();
+
+    // 1. Check if query matches a local unit / truck plate
+    const matchedMarker = markersRef.current.find(m => m.plate.includes(query));
+
+    if (matchedMarker) {
+      const latLng = matchedMarker.marker.getLatLng();
+      mapInstanceRef.current.setView(latLng, 16);
+      matchedMarker.marker.openPopup();
+      return;
+    }
+
+    // 2. Search global location using OpenStreetMap Geocoding (Nominatim)
+    setIsSearchingLocation(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const { lat, lon } = data[0];
+        mapInstanceRef.current.setView([parseFloat(lat), parseFloat(lon)], 14);
+      } else {
+        alert(`No truck or location found for "${mapSearchQuery}"`);
+      }
+    } catch (err) {
+      console.error('Map search error:', err);
+    } finally {
+      setIsSearchingLocation(false);
+    }
   };
 
   useEffect(() => {
@@ -877,11 +916,37 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
           </div>
         </div>
 
-        {/* SECTION 7: LEAFLET LIVE MAP CONTAINER */}
+        {/* SECTION 7: LEAFLET LIVE MAP CONTAINER WITH DUAL SEARCH BAR */}
         <div style={panelStyle} className="lg:col-span-2 shadow-sm">
-          <div className="flex items-center justify-between" style={headerStyle}>
+          <div className="flex flex-wrap items-center justify-between gap-2" style={headerStyle}>
             <span>LIVE MAP · {unitStatuses.length} UNITS TRACKED ({siteName})</span>
-            <div className="flex items-center gap-2">
+            
+            <div className="flex flex-wrap items-center gap-2">
+              <form onSubmit={handleMapSearch} className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={mapSearchQuery}
+                  onChange={e => setMapSearchQuery(e.target.value)}
+                  placeholder="Search truck plate or place..."
+                  className="px-2.5 py-1 text-xs rounded-lg outline-none font-mono"
+                  style={{
+                    background: MONITOR_COLORS.bg,
+                    color: '#fff',
+                    border: `1px solid ${MONITOR_COLORS.border}`,
+                    width: '210px',
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={isSearchingLocation}
+                  className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition-colors hover:opacity-80"
+                  style={{ background: MONITOR_COLORS.accent, color: '#120505' }}
+                >
+                  <Search className="h-3 w-3" />
+                  {isSearchingLocation ? '...' : 'SEARCH'}
+                </button>
+              </form>
+
               <button
                 onClick={fitToUnits}
                 className="rounded-lg px-3 py-1 text-xs font-bold transition-colors hover:opacity-80"
