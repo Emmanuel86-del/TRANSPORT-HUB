@@ -71,7 +71,7 @@ export function AuthPage({ portal }: { portal: PortalConfig }) {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="name@company.com"
-                  autoComplete="email"
+                  autoComplete="off"
                   className="input pl-9 text-sm"
                 />
               </div>
@@ -89,7 +89,7 @@ export function AuthPage({ portal }: { portal: PortalConfig }) {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   className="input pl-9 text-sm"
                 />
               </div>
