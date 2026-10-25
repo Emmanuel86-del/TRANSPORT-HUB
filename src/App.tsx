@@ -73,7 +73,14 @@ function SubAccountDashboardWrapper({ subAccount, mclArea, onViewAllContainers, 
     };
   }, [subAccount]);
 
-  return <Dashboard mclArea={mclArea} onViewAllContainers={onViewAllContainers} onViewCompliance={onViewCompliance} />;
+  return (
+    <Dashboard 
+      key={subAccount} 
+      mclArea={mclArea} 
+      onViewAllContainers={onViewAllContainers} 
+      onViewCompliance={onViewCompliance} 
+    />
+  );
 }
 
 function AppContent() {
@@ -143,15 +150,15 @@ function AppContent() {
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'dashboard': return <OverviewPage color={portal.color} />;
         
-        // Wrap every sub-account tab in the Dashboard Wrapper to ensure correct data context
+        // Pass unique keys so React unmounts/remounts Dashboard when switching sub-accounts
         case 'mcl': 
-          return <SubAccountDashboardWrapper subAccount="mcl" mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="mcl" subAccount="mcl" mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'tarmal': 
-          return <SubAccountDashboardWrapper subAccount="tarmal" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="tarmal" subAccount="tarmal" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'csl': 
-          return <SubAccountDashboardWrapper subAccount="csl" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="csl" subAccount="csl" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'mushroom': 
-          return <SubAccountDashboardWrapper subAccount="mushroom" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="mushroom" subAccount="mushroom" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         
         case 'users': return <Users />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
