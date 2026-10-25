@@ -8,6 +8,8 @@ import { useAuth } from '@/lib/auth';
 import { PortalConfig, TabId, SubAccount, PORTALS, MCLArea, getTabsForPortal, pathForSlug } from '@/lib/portals';
 import { useToast } from '@/components/Toast';
 import { UserRole } from '@/types';
+import { downloadExcelTemplate } from '@/lib/excelTemplates';
+import { UploadModal } from '@/components/UploadModal';
 
 type IconName = keyof typeof Icons;
 
@@ -43,7 +45,7 @@ export function WorkspaceShell({
   const { profile, signOut } = useAuth();
   const { showToast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [universalModalOpen, setUniversalModalOpen] = useState(false);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
 
   const allTabs = getTabsForPortal(portal.slug);
@@ -85,6 +87,15 @@ export function WorkspaceShell({
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [onTabChange]);
+
+  // Determine the right table template target based on active tab
+  const getTableForActiveTab = (): { tableName: string; templateKey: string } => {
+    if (activeTab === 'spare-parts') return { tableName: 'spare_parts_v2', templateKey: 'spare_parts' };
+    if (activeTab === 'tyres') return { tableName: 'tyres', templateKey: 'tyres' };
+    return { tableName: 'sub_account_trips', templateKey: 'trips' };
+  };
+
+  const currentMapping = getTableForActiveTab();
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -232,14 +243,17 @@ export function WorkspaceShell({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => showToast('Template download coming soon', 'info')}
+              onClick={() => {
+                downloadExcelTemplate(currentMapping.templateKey as any);
+                showToast('Template downloaded successfully', 'success');
+              }}
               className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
             >
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Download Templates</span>
             </button>
             <button
-              onClick={() => setUniversalModalOpen(true)}
+              onClick={() => setIsUploadOpen(true)}
               className="flex items-center gap-1.5 text-xs font-medium text-white rounded-lg px-3 py-2 shadow-sm transition-opacity hover:opacity-90"
               style={{ background: portal.color }}
             >
@@ -254,22 +268,17 @@ export function WorkspaceShell({
         </main>
       </div>
 
-      {universalModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-900">Upload Document</h3>
-              <button onClick={() => setUniversalModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 mb-4">Auto-routing upload will be available here. The system detects file type and routes to the correct table.</p>
-            <button onClick={() => { setUniversalModalOpen(false); showToast('Upload feature ready', 'success'); }} className="btn-primary w-full">
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Real Functional Upload Modal */}
+      <UploadModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        tableName={currentMapping.tableName}
+        subAccount={portal.slug}
+        onSuccess={() => {
+          showToast('Data imported successfully!', 'success');
+          window.location.reload();
+        }}
+      />
     </div>
   );
 }
