@@ -6,8 +6,8 @@ import { Truck, Lock, Mail, User, ArrowRight, AlertCircle } from 'lucide-react';
 export function AuthPage({ portal }: { portal: PortalConfig }) {
   const { signIn, signUp, authError } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState(portal.slug === 'master' ? 'adminashok@gmail.com' : `${portal.slug}ashok@gmail.com`);
-  const [password, setPassword] = useState(portal.slug === 'master' ? 'admin@2026' : `${portal.slug}@2026`);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [subAccount, setSubAccount] = useState<SubAccount>(portal.slug === 'master' ? 'mcl' : portal.slug);
   const [loading, setLoading] = useState(false);
