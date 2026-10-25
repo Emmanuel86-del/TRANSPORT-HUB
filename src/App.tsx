@@ -143,7 +143,7 @@ function AppContent() {
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'dashboard': return <OverviewPage color={portal.color} />;
         
-        // Dynamically set sub-account filter for each tab
+        // Wrap every sub-account tab in the Dashboard Wrapper to ensure correct data context
         case 'mcl': 
           return <SubAccountDashboardWrapper subAccount="mcl" mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'tarmal': 
