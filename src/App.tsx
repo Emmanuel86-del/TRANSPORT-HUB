@@ -3,7 +3,6 @@ import { useAuth, AuthProvider } from '@/lib/auth';
 import { AuthPage } from '@/pages/AuthPage';
 import { ToastProvider } from '@/components/Toast';
 import { WorkspaceShell } from '@/components/WorkspaceShell';
-import { MCLAreaSelection } from '@/components/MCLAreaSelection';
 import { LoadingSpinner } from '@/components/Shared';
 import { setSubAccountFilter } from '@/lib/supabase';
 
@@ -26,7 +25,7 @@ import { MasterReportsPage } from '@/pages/MasterReportsPage';
 import { OverviewPage } from '@/pages/PlaceholderPages';
 import { LiveMonitor } from '@/pages/LiveMonitor';
 
-import { portalFromPath, slugFromPath, PORTALS, TabId, MCLArea, SubAccount } from '@/lib/portals';
+import { portalFromPath, slugFromPath, PORTALS, TabId, SubAccount } from '@/lib/portals';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -65,7 +64,7 @@ class PageErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundary
   }
 }
 
-function SubAccountDashboardWrapper({ subAccount, mclArea, onViewAllContainers, onViewCompliance }: { subAccount: SubAccount; mclArea: MCLArea | null; onViewAllContainers: () => void; onViewCompliance: () => void }) {
+function SubAccountDashboardWrapper({ subAccount, onViewAllContainers, onViewCompliance }: { subAccount: SubAccount; onViewAllContainers: () => void; onViewCompliance: () => void }) {
   useEffect(() => {
     setSubAccountFilter(subAccount);
     return () => {
@@ -76,7 +75,6 @@ function SubAccountDashboardWrapper({ subAccount, mclArea, onViewAllContainers, 
   return (
     <Dashboard 
       key={subAccount} 
-      mclArea={mclArea} 
       onViewAllContainers={onViewAllContainers} 
       onViewCompliance={onViewCompliance} 
     />
@@ -95,7 +93,6 @@ function AppContent() {
   };
 
   const [activeTab, setActiveTab] = useState<TabId>(getInitialTab);
-  const [mclArea, setMclArea] = useState<MCLArea | null>(null);
 
   const pathSlug = slugFromPath(window.location.pathname);
   const portal = pathSlug ? (portalFromPath(window.location.pathname) ?? PORTALS.master) : PORTALS.master;
@@ -112,12 +109,6 @@ function AppContent() {
       window.location.replace('/admin');
     }
   }, []);
-
-  useEffect(() => {
-    if (pathSlug !== 'mcl') {
-      setMclArea(null);
-    }
-  }, [pathSlug]);
 
   if (loading) {
     return (
@@ -137,10 +128,6 @@ function AppContent() {
     return <AuthPage portal={portal} />;
   }
 
-  if (pathSlug === 'mcl' && !mclArea) {
-    return <MCLAreaSelection portal={portal} onAreaSelected={(area) => setMclArea(area)} />;
-  }
-
   const isMaster = pathSlug === 'master';
 
   const renderTabContent = () => {
@@ -152,13 +139,13 @@ function AppContent() {
         
         // Pass unique keys so React unmounts/remounts Dashboard when switching sub-accounts
         case 'mcl': 
-          return <SubAccountDashboardWrapper key="mcl" subAccount="mcl" mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="mcl" subAccount="mcl" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'tarmal': 
-          return <SubAccountDashboardWrapper key="tarmal" subAccount="tarmal" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="tarmal" subAccount="tarmal" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'csl': 
-          return <SubAccountDashboardWrapper key="csl" subAccount="csl" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="csl" subAccount="csl" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'mushroom': 
-          return <SubAccountDashboardWrapper key="mushroom" subAccount="mushroom" mclArea={null} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="mushroom" subAccount="mushroom" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         
         case 'users': return <Users />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
@@ -172,18 +159,18 @@ function AppContent() {
 
     switch (activeTab) {
       case 'live-monitor': return <LiveMonitor color={portal.color} subAccountFilter={portal.slug} />;
-      case 'dashboard': return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
-      case 'trips': return <SubAccountTrips mclArea={mclArea} portalColor={portal.color} />;
-      case 'fuel': return <SubAccountFuel mclArea={mclArea} portalColor={portal.color} />;
-      case 'tallies': return <SubAccountTallies mclArea={mclArea} portalColor={portal.color} />;
-      case 'spare-parts': return <SparePartsV2 mclArea={mclArea} portalColor={portal.color} />;
-      case 'tyres': return <TyresPage mclArea={mclArea} portalColor={portal.color} />;
-      case 'containers': return <ContainersPage mclArea={mclArea} portalColor={portal.color} />;
+      case 'dashboard': return <Dashboard onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+      case 'trips': return <SubAccountTrips mclArea={null} portalColor={portal.color} />;
+      case 'fuel': return <SubAccountFuel mclArea={null} portalColor={portal.color} />;
+      case 'tallies': return <SubAccountTallies mclArea={null} portalColor={portal.color} />;
+      case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} />;
+      case 'tyres': return <TyresPage mclArea={null} portalColor={portal.color} />;
+      case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} />;
       case 'compliance': return profile.role === 'manager' || profile.role === 'corporate_admin'
-          ? <CompliancePageFull mclArea={mclArea} portalColor={portal.color} />
+          ? <CompliancePageFull mclArea={null} portalColor={portal.color} />
           : <div className="flex flex-col items-center justify-center gap-3 py-20 text-center"><p className="text-sm text-slate-500">You need manager access to view compliance records.</p></div>;
-      case 'reports': return <ReportsPage mclArea={mclArea} portalColor={portal.color} />;
-      default: return <Dashboard mclArea={mclArea} onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+      case 'reports': return <ReportsPage mclArea={null} portalColor={portal.color} />;
+      default: return <Dashboard onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
     }
   };
 
@@ -192,8 +179,6 @@ function AppContent() {
       portal={portal}
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      mclArea={mclArea}
-      onMCLAreaBack={() => setMclArea(null)}
       subAccountSwitcher={isMaster}
     >
       <PageErrorBoundary>
