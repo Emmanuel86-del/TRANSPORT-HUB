@@ -1,48 +1,66 @@
-import { ReactNode } from 'react';
-import { Plus, Download } from 'lucide-react';
-import { downloadTemplate, TemplateName } from '@/lib/templates';
+import React from 'react';
 
-type PageHeaderProps = {
+interface PageHeaderProps {
   title: string;
-  subtitle?: string;
-  icon: ReactNode;
-  iconColor?: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  iconColor: string;
   onAdd?: () => void;
   addLabel?: string;
-  actions?: ReactNode;
-  templateName?: TemplateName;
-};
+  onUploadClick?: () => void; // Added prop for custom upload handler
+  onDownloadTemplate?: () => void; // Added prop for custom template download
+}
 
-export function PageHeader({ title, subtitle, icon, iconColor, onAdd, addLabel = 'Add New', actions, templateName }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  subtitle,
+  icon,
+  iconColor,
+  onAdd,
+  addLabel = 'Add New',
+  onUploadClick,
+  onDownloadTemplate,
+}: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <div
-          className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm"
-          style={{ background: iconColor ?? '#2563EB' }}
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex items-center gap-4">
+        <div 
+          className="p-3 rounded-xl text-white shadow-md flex items-center justify-center shrink-0"
+          style={{ background: iconColor }}
         >
           {icon}
         </div>
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900">{title}</h1>
-          {subtitle && <p className="text-sm text-slate-500">{subtitle}</p>}
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h1>
+          <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        {actions}
-        {templateName && (
+
+      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+        {onDownloadTemplate && (
           <button
-            onClick={() => downloadTemplate(templateName)}
-            className="flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+            onClick={onDownloadTemplate}
+            className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-sm transition-colors"
           >
-            <Download className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Download Template</span>
+            Download Template
+          </button>
+        )}
+        {onUploadClick && (
+          <button
+            onClick={onUploadClick}
+            className="px-3.5 py-2 text-xs font-semibold text-white rounded-xl shadow-sm transition-opacity hover:opacity-90"
+            style={{ background: iconColor }}
+          >
+            Upload Excel
           </button>
         )}
         {onAdd && (
-          <button onClick={onAdd} className="btn-primary">
-            <Plus className="h-4 w-4" />
-            {addLabel}
+          <button
+            onClick={onAdd}
+            className="px-4 py-2 text-xs font-bold text-white rounded-xl shadow-sm transition-opacity hover:opacity-90 flex items-center gap-1.5"
+            style={{ background: iconColor }}
+          >
+            <span>+</span> {addLabel}
           </button>
         )}
       </div>
