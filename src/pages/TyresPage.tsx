@@ -34,7 +34,7 @@ const TYRE_POSITIONS = [
   'Spare',
 ];
 
-export function TyresPage({ color, subAccountFilter }: { color: string; subAccountFilter?: string }) {
+export function TyresPage({ color, subAccountFilter, isMaster = false }: { color: string; subAccountFilter?: string; isMaster?: boolean }) {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -73,68 +73,16 @@ export function TyresPage({ color, subAccountFilter }: { color: string; subAccou
     loadData();
   }, [loadData]);
 
-  const handleOpenRotateModal = (vehicle: Vehicle) => {
-    setRotatingVehicle(vehicle);
-    const truckTyres = tyres.filter(t => t.vehicle_id === vehicle.id);
-    const initialMap: Record<string, string> = {};
-    truckTyres.forEach(t => {
-      initialMap[t.id] = t.position;
-    });
-    setRotationMap(initialMap);
-  };
-
-  const handleSaveRotation = async () => {
-    if (!rotatingVehicle) return;
-    try {
-      const truckTyres = tyres.filter(t => t.vehicle_id === rotatingVehicle.id);
-      const updates = [];
-      const historyInserts = [];
-
-      for (const tyre of truckTyres) {
-        const newPos = rotationMap[tyre.id];
-        if (newPos && newPos !== tyre.position) {
-          updates.push(
-            supabase.from('tyres').update({ position: newPos }).eq('id', tyre.id)
-          );
-          historyInserts.push({
-            tyre_id: tyre.id,
-            vehicle_id: rotatingVehicle.id,
-            action: 'rotated',
-            position: newPos,
-            date: new Date().toISOString(),
-            sub_account: rotatingVehicle.sub_account,
-          });
-        }
-      }
-
-      if (updates.length > 0) {
-        await Promise.all(updates);
-        if (historyInserts.length > 0) {
-          await supabase.from('tyre_history').insert(historyInserts);
-        }
-        showToast('Tyres rotated successfully', 'success');
-        setRotatingVehicle(null);
-        loadData();
-      } else {
-        showToast('No position changes detected', 'info');
-        setRotatingVehicle(null);
-      }
-    } catch (err) {
-      console.error('Error saving tyre rotation:', err);
-      showToast('Failed to save rotation', 'error');
-    }
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Tyre Management"
-        subtitle="Track active tyres, inventory, and rotations"
+        subtitle={isMaster ? 'Master monitoring view — tracking active tyres and rotations across sub-accounts' : 'Track active tyres, inventory, and rotations'}
         icon={<RotateCw className="h-6 w-6" />}
         iconColor={color}
       />
 
-      {/* Tabs & Action Buttons */}
+      {/* Tabs & Action Buttons (Hidden upload/rotate buttons for Master) */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-3">
         <div className="flex gap-2">
           {(['active', 'inventory', 'retired'] as const).map(tab => (
@@ -156,13 +104,15 @@ export function TyresPage({ color, subAccountFilter }: { color: string; subAccou
           >
             <Download className="h-3.5 w-3.5 text-slate-500" /> Download Template
           </button>
-          <button
-            onClick={() => setIsUploadOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg shadow-sm"
-            style={{ background: color }}
-          >
-            <Upload className="h-3.5 w-3.5" /> Upload Tyres
-          </button>
+          {!isMaster && (
+            <button
+              onClick={() => setIsUploadOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white rounded-lg shadow-sm"
+              style={{ background: color }}
+            >
+              <Upload className="h-3.5 w-3.5" /> Upload Tyres
+            </button>
+          )}
         </div>
       </div>
 
@@ -179,13 +129,20 @@ export function TyresPage({ color, subAccountFilter }: { color: string; subAccou
                     <Truck className="h-5 w-5" style={{ color }} />
                     <h3 className="font-bold text-slate-800">{vehicle.plate_number}</h3>
                   </div>
-                  <button
-                    onClick={() => handleOpenRotateModal(vehicle)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white rounded-lg shadow-sm"
-                    style={{ background: color }}
-                  >
-                    <RotateCw className="h-3.5 w-3.5" /> Rotate Tyres
-                  </button>
+                  {!isMaster && (
+                    <button
+                      onClick={() => {
+                        setRotatingVehicle(vehicle);
+                        const initialMap: Record<string, string> = {};
+                        truckTyres.forEach(t => { initialMap[t.id] = t.position; });
+                        setRotationMap(initialMap);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white rounded-lg shadow-sm"
+                      style={{ background: color }}
+                    >
+                      <RotateCw className="h-3.5 w-3.5" /> Rotate Tyres
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
                   {truckTyres.map(t => (
@@ -199,47 +156,6 @@ export function TyresPage({ color, subAccountFilter }: { color: string; subAccou
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Rotate Modal */}
-      {rotatingVehicle && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-bold text-slate-900">Rotate Tyres · {rotatingVehicle.plate_number}</h3>
-              <button onClick={() => setRotatingVehicle(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
-              {tyres.filter(t => t.vehicle_id === rotatingVehicle.id).map(tyre => (
-                <div key={tyre.id} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
-                  <div>
-                    <div className="font-bold text-sm text-slate-800">{tyre.serial_number}</div>
-                    <div className="text-xs text-slate-500">Current: {tyre.position}</div>
-                  </div>
-                  <select
-                    value={rotationMap[tyre.id] || tyre.position}
-                    onChange={e => setRotationMap({ ...rotationMap, [tyre.id]: e.target.value })}
-                    className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm outline-none"
-                  >
-                    {TYRE_POSITIONS.map(pos => (
-                      <option key={pos} value={pos}>{pos}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-            <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setRotatingVehicle(null)} className="px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-100 rounded-xl">
-                Cancel
-              </button>
-              <button onClick={handleSaveRotation} className="px-4 py-2 text-sm font-bold text-white rounded-xl shadow-sm" style={{ background: color }}>
-                Save Rotation
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
