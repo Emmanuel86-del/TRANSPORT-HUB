@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ShieldCheck, Plus, Edit, Search, Truck, User, AlertCircle, CalendarClock, CheckCircle, XCircle } from 'lucide-react';
+import { ShieldCheck, Plus, Edit, Search, Truck, User, AlertCircle, CalendarClock, CheckCircle, XCircle, Upload } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
@@ -9,6 +9,7 @@ import { DocumentUpload } from '@/components/DocumentUpload';
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { useToast } from '@/components/Toast';
 import { SubAccount, MCLArea } from '@/lib/portals';
+import { BulkImportModal } from '@/components/BulkImportModal';
 
 type Tab = 'vehicle' | 'driver';
 
@@ -90,8 +91,6 @@ function statusBadge(days: number | null): { bg: string; text: string; label: st
   return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Active' };
 }
 
-const fmtKES = (n: number | null) => n != null ? n.toLocaleString() : '—';
-
 export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: { mclArea: MCLArea | null; portalColor: string; isMaster?: boolean }) {
   const { showToast } = useToast();
   const { profile } = useAuth();
@@ -108,6 +107,7 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
   const [filterType, setFilterType] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [docs, setDocs] = useState<string[]>([]);
@@ -267,14 +267,25 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader
-        title="Compliance"
-        subtitle="Track vehicle and driver compliance documents, inspections, and certifications"
-        icon={<ShieldCheck className="h-6 w-6" />}
-        iconColor={portalColor}
-        onAdd={openAdd}
-        addLabel={activeTab === 'vehicle' ? 'Add Vehicle Compliance' : 'Add Driver Compliance'}
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <PageHeader
+          title="Compliance"
+          subtitle="Track vehicle and driver compliance documents, inspections, and certifications"
+          icon={<ShieldCheck className="h-6 w-6" />}
+          iconColor={portalColor}
+          onAdd={openAdd}
+          addLabel={activeTab === 'vehicle' ? 'Add Vehicle Compliance' : 'Add Driver Compliance'}
+        />
+        {!isMaster && (
+          <button
+            onClick={() => setIsBulkOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+          >
+            <Upload className="h-4 w-4 text-slate-500" />
+            Bulk Import
+          </button>
+        )}
+      </div>
 
       {isMaster && (
         <div className="flex items-center gap-3">
@@ -554,6 +565,20 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
           </button>
         </div>
       </Modal>
+
+      <BulkImportModal
+        open={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        tableName={activeTab === 'vehicle' ? 'vehicle_compliance_items' : 'driver_compliance_items'}
+        portalColor={portalColor}
+        subAccount={subAccount}
+        sampleColumns={
+          activeTab === 'vehicle'
+            ? ['vehicle_id', 'compliance_type', 'cert_number', 'issuer', 'issue_date', 'expiry_date', 'alert_days', 'renewal_cost', 'status', 'notes']
+            : ['driver_id', 'compliance_type', 'document_number', 'issue_date', 'expiry_date', 'alert_days', 'status', 'notes']
+        }
+        onSuccess={loadData}
+      />
     </div>
   );
 }
