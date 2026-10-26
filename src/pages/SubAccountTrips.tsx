@@ -10,6 +10,7 @@ import { useToast } from '@/components/Toast';
 import { SubAccount, MCLArea } from '@/lib/portals';
 import { downloadExcelTemplate } from '@/lib/excelTemplates';
 import { UploadModal } from '@/components/UploadModal';
+import { BulkImportModal } from '@/components/BulkImportModal';
 
 interface SubTrip {
   id: string;
@@ -62,6 +63,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   const [drivers, setDrivers] = useState<any[]>([]);
   const [routeRates, setRouteRates] = useState<RouteRate[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [tripDocs, setTripDocs] = useState<string[]>([]);
@@ -226,11 +228,10 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
             <Download className="h-4 w-4 text-slate-500" /> Download Template
           </button>
           <button
-            onClick={() => setIsUploadOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white rounded-xl shadow-sm transition-opacity hover:opacity-90"
-            style={{ background: portalColor }}
+            onClick={() => setIsBulkOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl shadow-sm transition-colors"
           >
-            <Upload className="h-4 w-4" /> Upload Trips
+            <Upload className="h-4 w-4 text-slate-500" /> Bulk Import
           </button>
         </div>
       </div>
@@ -328,12 +329,14 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         </div>
       </Modal>
 
-      {/* Upload Modal */}
-      <UploadModal
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        open={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
         tableName="sub_account_trips"
+        portalColor={portalColor}
         subAccount={subAccount}
+        sampleColumns={['trip_date', 'trailer_number', 'departure_point', 'arrival_point', 'net_tallage', 'fuel_expected', 'fuel_actual', 'mileage_payment', 'labour_cost', 'status', 'notes']}
         onSuccess={loadData}
       />
     </div>
