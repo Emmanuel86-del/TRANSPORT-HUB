@@ -31,7 +31,7 @@ export type NavTab = {
   icon: string;
 };
 
-export const PORTALS: Record<SubAccount, PortalConfig> = {
+export const PORTALS: Record<, PortalConfig> = {
   mcl: {
     slug: 'mcl', name: 'MCL', fullName: 'MCL Transport',
     color: '#1D4ED8', colorLight: '#3B82F6', colorDark: '#1E40AF',
@@ -65,6 +65,7 @@ const SUB_ACCOUNT_TABS: NavTab[] = [
   { id: 'trips', label: 'Trips', icon: 'Route' },
   { id: 'fuel', label: 'Fuel', icon: 'Fuel' },
   { id: 'tallies', label: 'Tallies', icon: 'Calculator' },
+  { id: 'drivers', label: 'Drivers', icon: 'Users' }
   { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
   { id: 'tyres', label: 'Tyres', icon: 'Disc' },
   { id: 'containers', label: 'Containers', icon: 'Package' },
@@ -83,6 +84,7 @@ const MASTER_TABS: NavTab[] = [
   { id: 'tarmal', label: 'TARMAL', icon: 'Building2' },
   { id: 'csl', label: 'CSL', icon: 'Building2' },
   { id: 'mushroom', label: 'MUSHROOM', icon: 'Building2' },
+  { id: 'drivers', label: 'Drivers', icon: 'Users' }
   { id: 'users', label: 'Users', icon: 'Users' },
   { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
   { id: 'tyres', label: 'Tyres', icon: 'Disc' },
@@ -91,7 +93,7 @@ const MASTER_TABS: NavTab[] = [
   { id: 'reports', label: 'Reports', icon: 'FileText' },
 ];
 
-export function getTabsForPortal(slug: SubAccount): NavTab[] {
+export function getTabsForPortal(slug: ): NavTab[] {
   if (slug === 'tarmal') return TARMAL_TABS;
   if (slug === 'master') return MASTER_TABS;
   return SUB_ACCOUNT_TABS;
