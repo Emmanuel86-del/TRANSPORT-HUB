@@ -33,7 +33,17 @@ export function Dashboard({
 
   useEffect(() => {
     async function load() {
-      const currentSubAccount = subAccountProp ?? profile?.sub_account ?? getSubAccountFilter() ?? 'master';
+      // Extract sub-account dynamically from URL path (e.g. /admin/mcl -> 'mcl', /admin/tarmal -> 'tarmal')
+      const pathSegments = window.location.pathname.split('/').filter(Boolean);
+      let detectedSubAccount = subAccountProp;
+      if (!detectedSubAccount && pathSegments.length >= 2 && pathSegments[0] === 'admin') {
+        const potentialSub = pathSegments[1];
+        if (['mcl', 'tarmal', 'csl', 'mushroom'].includes(potentialSub)) {
+          detectedSubAccount = potentialSub;
+        }
+      }
+
+      const currentSubAccount = detectedSubAccount ?? profile?.sub_account ?? getSubAccountFilter() ?? 'master';
 
       let tripsQuery = supabase.from('trips').select('*, driver:drivers(*), vehicle:vehicles(*)').order('trip_date', { ascending: false }).limit(50);
       let vehiclesQuery = supabase.from('vehicles').select('*');
