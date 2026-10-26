@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, Plus, Search, Phone, CreditCard, Award, CheckCircle, XCircle, Trash2, Edit } from 'lucide-react';
+import { Users, Plus, Search, Phone, CreditCard, Award, CheckCircle, XCircle, Trash2, Edit, Shield } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { SubAccount } from '@/lib/portals';
@@ -24,6 +24,8 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
   const [phone, setPhone] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
+  const [nssfNumber, setNssfNumber] = useState('');
+  const [shaNumber, setShaNumber] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
   const fetchDrivers = async () => {
@@ -51,6 +53,8 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
     setPhone('');
     setIdNumber('');
     setLicenseNumber('');
+    setNssfNumber('');
+    setShaNumber('');
     setStatus('active');
     setIsModalOpen(true);
   };
@@ -61,6 +65,8 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
     setPhone(driver.phone || '');
     setIdNumber(driver.id_number || '');
     setLicenseNumber(driver.license_number || '');
+    setNssfNumber((driver as any).nssf_number || '');
+    setShaNumber((driver as any).sha_number || '');
     setStatus(driver.status || 'active');
     setIsModalOpen(true);
   };
@@ -77,6 +83,8 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
       phone,
       id_number: idNumber,
       license_number: licenseNumber,
+      nssf_number: nssfNumber,
+      sha_number: shaNumber,
       status,
       sub_account: isMaster ? subAccount : subAccount,
     };
@@ -113,11 +121,16 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
     }
   };
 
-  const filteredDrivers = drivers.filter(d => 
-    d.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.license_number?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredDrivers = drivers.filter(d => {
+    const driverAny = d as any;
+    return (
+      d.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      d.license_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      driverAny.nssf_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      driverAny.sha_number?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
 
   if (loading) return <LoadingSpinner message="Loading drivers..." />;
 
@@ -130,7 +143,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Drivers Management</h1>
-            <p className="text-sm text-slate-500">Manage fleet drivers, licenses, and contact information</p>
+            <p className="text-sm text-slate-500">Manage fleet drivers, licenses, NSSF, SHA, and contact information</p>
           </div>
         </div>
 
@@ -151,7 +164,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
         <Search className="h-5 w-5 text-slate-400 shrink-0" />
         <input
           type="text"
-          placeholder="Search by name, phone, or license number..."
+          placeholder="Search by name, phone, license, NSSF, or SHA..."
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           className="w-full bg-transparent text-sm outline-none text-slate-800 placeholder-slate-400"
@@ -171,57 +184,64 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
                 <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                   <th className="px-5 py-3">Driver Name</th>
                   <th className="px-5 py-3">Phone Number</th>
-                  <th className="px-5 py-3">ID Number</th>
-                  <th className="px-5 py-3">License Number</th>
+                  <th className="px-5 py-3">ID / License</th>
+                  <th className="px-5 py-3">NSSF & SHA</th>
                   <th className="px-5 py-3">Status</th>
                   {!isMaster && <th className="px-5 py-3 text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredDrivers.map(d => (
-                  <tr key={d.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-semibold text-slate-900 flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold text-xs">
-                        {d.name?.substring(0, 2).toUpperCase()}
-                      </div>
-                      {d.name}
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600 flex items-center gap-1.5 pt-4">
-                      <Phone className="h-3.5 w-3.5 text-slate-400" />
-                      {d.phone || '—'}
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600">
-                      <div className="flex items-center gap-1.5">
-                        <CreditCard className="h-3.5 w-3.5 text-slate-400" />
-                        {d.id_number || '—'}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600">
-                      <div className="flex items-center gap-1.5">
-                        <Award className="h-3.5 w-3.5 text-slate-400" />
-                        {d.license_number || '—'}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        d.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {d.status === 'active' ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-                        {d.status === 'active' ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    {!isMaster && (
-                      <td className="px-5 py-3.5 text-right space-x-2">
-                        <button onClick={() => handleOpenEditModal(d)} className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button onClick={() => handleDeleteDriver(d.id)} className="p-1.5 text-slate-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                {filteredDrivers.map(d => {
+                  const driverAny = d as any;
+                  return (
+                    <tr key={d.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-5 py-3.5 font-semibold text-slate-900 flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-bold text-xs">
+                          {d.name?.substring(0, 2).toUpperCase()}
+                        </div>
+                        {d.name}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="px-5 py-3.5 text-slate-600 flex items-center gap-1.5 pt-4">
+                        <Phone className="h-3.5 w-3.5 text-slate-400" />
+                        {d.phone || '—'}
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-600 space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <CreditCard className="h-3 w-3 text-slate-400" /> ID: {d.id_number || '—'}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <Award className="h-3 w-3 text-slate-400" /> Lic: {d.license_number || '—'}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-600 space-y-0.5">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <Shield className="h-3 w-3 text-blue-500" /> NSSF: {driverAny.nssf_number || '—'}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <Shield className="h-3 w-3 text-emerald-500" /> SHA: {driverAny.sha_number || '—'}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          d.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {d.status === 'active' ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                          {d.status === 'active' ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      {!isMaster && (
+                        <td className="px-5 py-3.5 text-right space-x-2">
+                          <button onClick={() => handleOpenEditModal(d)} className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button onClick={() => handleDeleteDriver(d.id)} className="p-1.5 text-slate-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -247,6 +267,16 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">License Number</label>
               <input type="text" className="input" placeholder="Driver License" value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">NSSF Number</label>
+              <input type="text" className="input" placeholder="NSSF No." value={nssfNumber} onChange={e => setNssfNumber(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">SHA Number</label>
+              <input type="text" className="input" placeholder="SHA No." value={shaNumber} onChange={e => setShaNumber(e.target.value)} />
             </div>
           </div>
           <div>
