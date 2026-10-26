@@ -133,7 +133,7 @@ function AppContent() {
   const renderTabContent = () => {
     if (isMaster) {
       switch (activeTab) {
-        case 'live-monitor': return <LiveMonitor color={portal.color} />;
+        case 'live-monitor': return <LiveMonitor color={portal.color} subAccountFilter="all" />;
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'dashboard': return <OverviewPage color={portal.color} />;
         
