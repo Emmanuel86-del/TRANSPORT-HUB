@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Package, AlertTriangle, ChevronRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { getSubAccountFilter } from '@/lib/supabase';
 import { SubAccount, MCLArea } from '@/lib/portals';
 
 interface DueContainer {
@@ -10,6 +9,7 @@ interface DueContainer {
   container_no: string;
   vehicle_id: string | null;
   detention_validity: string;
+  sub_account: string;
   vehicle?: { plate_number: string } | null;
 }
 
@@ -25,28 +25,43 @@ export function ContainersDueSoonAlert({
   mclArea,
   portalColor,
   onViewAll,
+  subAccountProp,
 }: {
   mclArea: MCLArea | null;
   portalColor: string;
   onViewAll: () => void;
+  subAccountProp?: string;
 }) {
   const { profile } = useAuth();
-  const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
+  
+  // Detect sub-account dynamically from props or URL path
+  const pathSegments = window.location.pathname.split('/').filter(Boolean);
+  let activeSubAccount = subAccountProp;
+  if (!activeSubAccount && pathSegments.length >= 2 && pathSegments[0] === 'admin') {
+    activeSubAccount = pathSegments[1];
+  }
+
+  const subAccount = (activeSubAccount ?? profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
   const isMCL = subAccount === 'mcl';
   const [dueContainers, setDueContainers] = useState<DueContainer[]>([]);
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
+      let query = supabase
         .from('sub_account_containers')
-        .select('id, container_no, vehicle_id, detention_validity, vehicle:vehicles(plate_number)')
+        .select('id, container_no, vehicle_id, detention_validity, sub_account, vehicle:vehicles(plate_number)')
         .eq('status', 'active')
         .not('detention_validity', 'is', null);
 
+      if (subAccount && subAccount !== 'master' && subAccount !== 'all') {
+        query = query.eq('sub_account', subAccount);
+      }
+
+      const { data } = await query;
       let items = (data as unknown as DueContainer[]) || [];
+
       if (isMCL && mclArea) {
-        const all = (data as any[]) || [];
-        items = all.filter((c: any) => c.mcl_area_id === mclArea);
+        items = items.filter((c: any) => c.mcl_area_id === mclArea);
       }
 
       const filtered = items.filter(c => {
@@ -57,7 +72,7 @@ export function ContainersDueSoonAlert({
       setDueContainers(filtered);
     }
     load();
-  }, [isMCL, mclArea]);
+  }, [subAccount, isMCL, mclArea]);
 
   if (dueContainers.length === 0) return null;
 
