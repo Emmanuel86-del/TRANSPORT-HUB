@@ -3,14 +3,26 @@ import {
   Truck, Users, Wrench, Package, Route, Fuel, DollarSign,
   AlertTriangle, TrendingUp, Calendar, ShieldCheck, ChevronRight,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, getSubAccountFilter } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { StatCard } from '@/components/StatCard';
 import { Trip, Vehicle, Driver, SparePart, WorkRecord } from '@/types';
 import { LoadingSpinner } from '@/components/Shared';
 import { ContainersDueSoonAlert } from '@/components/ContainersDueSoonAlert';
 import { MCLArea } from '@/lib/portals';
 
-export function Dashboard({ mclArea, onViewAllContainers, onViewCompliance }: { mclArea?: MCLArea | null; onViewAllContainers?: () => void; onViewCompliance?: () => void }) {
+export function Dashboard({ 
+  subAccount: subAccountProp,
+  mclArea, 
+  onViewAllContainers, 
+  onViewCompliance 
+}: { 
+  subAccount?: string;
+  mclArea?: MCLArea | null; 
+  onViewAllContainers?: () => void; 
+  onViewCompliance?: () => void 
+}) {
+  const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -21,15 +33,40 @@ export function Dashboard({ mclArea, onViewAllContainers, onViewCompliance }: { 
 
   useEffect(() => {
     async function load() {
+      const currentSubAccount = subAccountProp ?? profile?.sub_account ?? getSubAccountFilter() ?? 'master';
+
+      let tripsQuery = supabase.from('trips').select('*, driver:drivers(*), vehicle:vehicles(*)').order('trip_date', { ascending: false }).limit(50);
+      let vehiclesQuery = supabase.from('vehicles').select('*');
+      let driversQuery = supabase.from('drivers').select('*');
+      let partsQuery = supabase.from('spare_parts').select('*');
+      let workQuery = supabase.from('work_records').select('*').order('work_date', { ascending: false });
+      let vcQuery = supabase.from('vehicle_compliance_items').select('id, vehicle_id, compliance_type, expiry_date, vehicle:vehicles(plate_number)').order('expiry_date', { ascending: true, nullsFirst: false });
+      let dcQuery = supabase.from('driver_compliance_items').select('id, driver_id, compliance_type, expiry_date, driver:drivers(name)').order('expiry_date', { ascending: true, nullsFirst: false });
+
+      if (currentSubAccount && currentSubAccount !== 'master' && currentSubAccount !== 'all') {
+        tripsQuery = tripsQuery.eq('sub_account', currentSubAccount);
+        vehiclesQuery = vehiclesQuery.eq('sub_account', currentSubAccount);
+        driversQuery = driversQuery.eq('sub_account', currentSubAccount);
+        partsQuery = partsQuery.eq('sub_account', currentSubAccount);
+        workQuery = workQuery.eq('sub_account', currentSubAccount);
+        vcQuery = vcQuery.eq('sub_account', currentSubAccount);
+        dcQuery = dcQuery.eq('sub_account', currentSubAccount);
+      }
+
+      if (currentSubAccount === 'mcl' && mclArea) {
+        tripsQuery = tripsQuery.eq('mcl_area_id', mclArea);
+      }
+
       const [tripsRes, vehiclesRes, driversRes, partsRes, workRes, vcRes, dcRes] = await Promise.all([
-        supabase.from('trips').select('*, driver:drivers(*), vehicle:vehicles(*)').order('trip_date', { ascending: false }).limit(50),
-        supabase.from('vehicles').select('*'),
-        supabase.from('drivers').select('*'),
-        supabase.from('spare_parts').select('*'),
-        supabase.from('work_records').select('*').order('work_date', { ascending: false }),
-        supabase.from('vehicle_compliance_items').select('id, vehicle_id, compliance_type, expiry_date, vehicle:vehicles(plate_number)').order('expiry_date', { ascending: true, nullsFirst: false }),
-        supabase.from('driver_compliance_items').select('id, driver_id, compliance_type, expiry_date, driver:drivers(name)').order('expiry_date', { ascending: true, nullsFirst: false }),
+        tripsQuery,
+        vehiclesQuery,
+        driversQuery,
+        partsQuery,
+        workQuery,
+        vcQuery,
+        dcQuery,
       ]);
+
       setTrips(tripsRes.data || []);
       setVehicles(vehiclesRes.data || []);
       setDrivers(driversRes.data || []);
@@ -59,11 +96,11 @@ export function Dashboard({ mclArea, onViewAllContainers, onViewCompliance }: { 
       setLoading(false);
     }
     load();
-  }, []);
+  }, [subAccountProp, profile?.sub_account, mclArea]);
 
   if (loading) return <LoadingSpinner message="Loading dashboard..." />
 
-  const portalColor = '#2563EB';;
+  const portalColor = '#2563EB';
 
   const activeTrips = trips.filter(t => t.status === 'in_progress' || t.status === 'scheduled');
   const completedTrips = trips.filter(t => t.status === 'completed');
