@@ -9,6 +9,7 @@ import { setSubAccountFilter } from '@/lib/supabase';
 // Existing pages
 import { Dashboard } from '@/pages/Dashboard';
 import { Users } from '@/pages/Users';
+import { DriversPage } from '@/pages/DriversPage';
 
 // Sub-account pages
 import { SubAccountTrips } from '@/pages/SubAccountTrips';
@@ -147,6 +148,7 @@ function AppContent() {
           return <SubAccountDashboardWrapper key="mushroom" subAccount="mushroom" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         
         case 'users': return <Users />;
+        case 'drivers': return <DriversPage portalColor={portal.color} isMaster />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
         case 'tyres': return <TyresPage mclArea={null} portalColor={portal.color} isMaster />;
         case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} isMaster />;
@@ -162,6 +164,7 @@ function AppContent() {
       case 'trips': return <SubAccountTrips mclArea={null} portalColor={portal.color} />;
       case 'fuel': return <SubAccountFuel mclArea={null} portalColor={portal.color} />;
       case 'tallies': return <SubAccountTallies mclArea={null} portalColor={portal.color} />;
+      case 'drivers': return <DriversPage portalColor={portal.color} />;
       case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} />;
       case 'tyres': return <TyresPage mclArea={null} portalColor={portal.color} />;
       case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} />;
