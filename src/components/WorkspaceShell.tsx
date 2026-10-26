@@ -40,7 +40,7 @@ export function WorkspaceShell({
   children: ReactNode;
   mclArea?: MCLArea | null;
   onMCLAreaBack?: () => void;
-  subAccountSwitcher?: ReactNode;
+  subAccountSwitcher?: boolean;
 }) {
   const { profile, signOut } = useAuth();
   const { showToast } = useToast();
@@ -50,20 +50,17 @@ export function WorkspaceShell({
 
   const allTabs = getTabsForPortal(portal.slug);
   const userRole = profile?.role ?? 'employee';
-  const tabs = allTabs;
 
   const navigate = (tab: TabId) => {
-    if (tab === activeTab) return; // Prevent redundant state triggers
+    if (tab === activeTab) return;
     onTabChange(tab);
     setSidebarOpen(false);
 
-    // Use pathForSlug to correctly resolve /admin for master and /{slug} for sub-accounts
     const basePath = pathForSlug(portal.slug);
     const newPath = (tab === 'live-monitor' || tab === 'dashboard' || tab === 'overview')
       ? basePath
       : `${basePath}/${tab}`;
     
-    // Update URL silently without triggering re-auth or full reloads
     if (window.location.pathname !== newPath) {
       window.history.replaceState({ tab }, '', newPath);
     }
@@ -88,7 +85,6 @@ export function WorkspaceShell({
     return () => window.removeEventListener('popstate', handlePopState);
   }, [onTabChange]);
 
-  // Determine the right table template target based on active tab
   const getTableForActiveTab = (): { tableName: string; templateKey: string } => {
     if (activeTab === 'spare-parts') return { tableName: 'spare_parts_v2', templateKey: 'spare_parts' };
     if (activeTab === 'tyres') return { tableName: 'tyres', templateKey: 'tyres' };
@@ -96,6 +92,7 @@ export function WorkspaceShell({
   };
 
   const currentMapping = getTableForActiveTab();
+  const isMaster = portal.slug === 'master';
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -142,7 +139,7 @@ export function WorkspaceShell({
         )}
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {tabs.map(tab => {
+          {allTabs.map(tab => {
             const Icon = getIcon(tab.icon);
             const isActive = activeTab === tab.id;
             const isLiveMonitor = tab.id === 'live-monitor';
@@ -190,34 +187,29 @@ export function WorkspaceShell({
             >
               <Menu className="h-5 w-5" />
             </button>
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg text-white" style={{ background: portal.color }}>
-                <TruckIcon className="h-5 w-5" />
-              </div>
-              <span className="font-bold text-slate-900 hidden sm:inline">{portal.fullName}</span>
-            </div>
 
-            {mclArea && onMCLAreaBack && (
-              <div className="hidden sm:flex items-center gap-2 ml-2">
-                <span className="text-slate-300">/</span>
-                <span className="font-semibold text-slate-700 capitalize">{mclArea}</span>
-              </div>
-            )}
-
+            {/* Clean Sub-Account Switcher dropdown */}
             {subAccountSwitcher && (
-              <div className="relative ml-2">
+              <div className="relative">
                 <button
                   onClick={() => setShowSwitcher(!showSwitcher)}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100 transition-colors shadow-sm"
                 >
-                  <Building2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Switch Sub-Account</span>
-                  <ChevronDown className="h-4 w-4" />
+                  <Building2 className="h-4 w-4 text-red-700" />
+                  <span>{portal.fullName}</span>
+                  <ChevronDown className="h-4 w-4 text-slate-500" />
                 </button>
                 {showSwitcher && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setShowSwitcher(false)} />
-                    <div className="absolute left-0 mt-2 w-48 rounded-xl border border-slate-200 bg-white shadow-xl z-20 py-1 animate-fade-in">
+                    <div className="absolute left-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-xl z-20 py-1 animate-fade-in">
+                      <button
+                        onClick={() => { setShowSwitcher(false); window.location.href = '/admin'; }}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+                      >
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-700" />
+                        Master Fleet Summary
+                      </button>
                       {(['mcl', 'tarmal', 'csl', 'mushroom'] as SubAccount[]).map(slug => {
                         const p = PORTALS[slug];
                         return (
@@ -241,6 +233,7 @@ export function WorkspaceShell({
             )}
           </div>
 
+          {/* Hide Upload button if in Master view */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
@@ -252,14 +245,16 @@ export function WorkspaceShell({
               <Download className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Download Templates</span>
             </button>
-            <button
-              onClick={() => setIsUploadOpen(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-white rounded-lg px-3 py-2 shadow-sm transition-opacity hover:opacity-90"
-              style={{ background: portal.color }}
-            >
-              <Upload className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Upload</span>
-            </button>
+            {!isMaster && (
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-white rounded-lg px-3 py-2 shadow-sm transition-opacity hover:opacity-90"
+                style={{ background: portal.color }}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Upload</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -268,7 +263,6 @@ export function WorkspaceShell({
         </main>
       </div>
 
-      {/* Real Functional Upload Modal */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
