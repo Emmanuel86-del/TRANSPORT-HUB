@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Package, Plus, Edit, Trash2, AlertTriangle, Clock, Truck } from 'lucide-react';
+import { Package, Plus, Edit, Trash2, AlertTriangle, Clock, Truck, Upload } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
@@ -9,6 +9,7 @@ import { DocumentScanner, ScannedDocumentFields } from '@/components/DocumentSca
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { useToast } from '@/components/Toast';
 import { SubAccount, MCLArea } from '@/lib/portals';
+import { BulkImportModal } from '@/components/BulkImportModal';
 
 interface Container {
   id: string;
@@ -58,6 +59,7 @@ export function ContainersPage({ mclArea, portalColor, isMaster = false }: { mcl
   const [containers, setContainers] = useState<Container[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [containerDocs, setContainerDocs] = useState<string[]>([]);
@@ -252,17 +254,26 @@ export function ContainersPage({ mclArea, portalColor, isMaster = false }: { mcl
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <PageHeader
-        title="Containers"
-        subtitle={derivedIsMaster ? 'Master monitoring view — tracking container detention validity and shipping details across sub-accounts' : (isMCL && mclArea ? `MCL — ${mclArea.charAt(0).toUpperCase() + mclArea.slice(1)} area container tracking` : 'Container tracking with detention monitoring')}
-        icon={<Package className="h-6 w-6" />}
-        iconColor={portalColor}
-        onAdd={!derivedIsMaster ? openAdd : undefined}
-        addLabel="Add Container"
-        templateName="containers"
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <PageHeader
+          title="Containers"
+          subtitle={derivedIsMaster ? 'Master monitoring view — tracking container detention validity and shipping details across sub-accounts' : (isMCL && mclArea ? `MCL — ${mclArea.charAt(0).toUpperCase() + mclArea.slice(1)} area container tracking` : 'Container tracking with detention monitoring')}
+          icon={<Package className="h-6 w-6" />}
+          iconColor={portalColor}
+          onAdd={!derivedIsMaster ? openAdd : undefined}
+          addLabel="Add Container"
+        />
+        {!derivedIsMaster && (
+          <button
+            onClick={() => setIsBulkOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+          >
+            <Upload className="h-4 w-4 text-slate-500" />
+            Bulk Import
+          </button>
+        )}
+      </div>
 
-      {/* Master Sub-Account Filter */}
       {derivedIsMaster && (
         <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
           <label className="text-sm font-medium text-slate-600">Filter Sub-Account:</label>
@@ -276,7 +287,6 @@ export function ContainersPage({ mclArea, portalColor, isMaster = false }: { mcl
         </div>
       )}
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -482,6 +492,32 @@ export function ContainersPage({ mclArea, portalColor, isMaster = false }: { mcl
           </div>
         </Modal>
       )}
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        open={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        tableName="sub_account_containers"
+        portalColor={portalColor}
+        subAccount={subAccount}
+        sampleColumns={[
+          'container_no',
+          'size',
+          'shipping_line',
+          'agent_name',
+          'consignee',
+          'bl_no',
+          'vessel_voyage',
+          'eta',
+          'destination',
+          'detention_validity',
+          'release_date',
+          'trailer_number',
+          'status',
+          'notes',
+        ]}
+        onSuccess={loadData}
+      />
     </div>
   );
 }
