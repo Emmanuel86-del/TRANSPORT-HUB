@@ -116,7 +116,7 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
 
   const periodLabel = `${fmtDate(new Date(filters.fromDate))} → ${fmtDate(new Date(filters.toDate))}`;
 
-  // ALL useMemo hooks are declared unconditionally here at the top level
+  // ALL useMemo hooks declared unconditionally at the top level
   const trips = data?.trips || [];
   const fuel = data?.fuel || [];
   const tallies = data?.tallies || [];
@@ -519,7 +519,7 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
       <Modal open={weeklyModalOpen} onClose={() => setWeeklyModalOpen(false)} title={`Weekly Report — ${lastWeek.label}`} size="lg">
         <div className="space-y-4 max-h-[60vh] overflow-y-auto">
           <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
-            <p className="text-sm font-semibold text-slate-700">{PORTALS[subAccount].fullName}</p>
+            <p className="text-sm font-semibold text-slate-700">{PORTALS[subAccount]?.fullName || 'Fleet Portal'}</p>
             <p className="text-xs text-slate-500">{lastWeek.label}</p>
           </div>
 
