@@ -100,7 +100,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
   const [tyresData, setTyresData] = useState<any[]>([]);
   const { data, loading } = useReportData(filters, false);
 
-  // Load vehicles and tyre data properly using useEffect
   useEffect(() => {
     supabase.from('vehicles').select('id, plate_number').order('plate_number').then((r: any) => {
       setVehicles(r.data || []);
@@ -116,6 +115,188 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
   }, [subAccount]);
 
   const periodLabel = `${fmtDate(new Date(filters.fromDate))} → ${fmtDate(new Date(filters.toDate))}`;
+
+  // ALL useMemo hooks are declared unconditionally here at the top level
+  const trips = data?.trips || [];
+  const fuel = data?.fuel || [];
+  const tallies = data?.tallies || [];
+  const parts = data?.spareParts || [];
+  const containers = data?.containers || [];
+
+  const tyreCostPerTruck = useMemo(() => {
+    const m: Record<string, { plate: string; cost: number }> = {};
+    tyresData.forEach(t => {
+      const plate = t.vehicle?.plate_number || 'Unassigned';
+      if (!m[plate]) m[plate] = { plate, cost: 0 };
+      m[plate].cost += Number(t.cost || 0);
+    });
+    return Object.values(m);
+  }, [tyresData]);
+
+  const avgTyreKm = tyresData.length > 0 ? Math.round(tyresData.reduce((s, t) => s + Number(t.total_km || 0), 0) / tyresData.length) : 0;
+  const fittedThisMonth = tyresData.filter(t => t.status === 'in_use').length;
+  const removedThisMonth = tyresData.filter(t => t.status === 'retired').length;
+
+  const retirementReasons = useMemo(() => {
+    const m: Record<string, number> = {};
+    tyresData.filter(t => t.status === 'retired').forEach(t => {
+      const reason = t.retirement_reason || 'Normal Wear';
+      m[reason] = (m[reason] || 0) + 1;
+    });
+    return Object.entries(m);
+  }, [tyresData]);
+
+  const tripsByTruck = useMemo(() => {
+    const m: Record<string, { plate: string; count: number }> = {};
+    trips.forEach((t: any) => {
+      const p = t.vehicle?.plate_number || 'Unassigned';
+      if (!m[p]) m[p] = { plate: p, count: 0 };
+      m[p].count++;
+    });
+    return Object.values(m);
+  }, [trips]);
+
+  const tripsByDriver = useMemo(() => {
+    const m: Record<string, { name: string; count: number; mileage: number }> = {};
+    trips.forEach((t: any) => {
+      const n = t.driver?.name || 'Unassigned';
+      if (!m[n]) m[n] = { name: n, count: 0, mileage: 0 };
+      m[n].count++;
+      m[n].mileage += Number(t.mileage_payment || 0);
+    });
+    return Object.values(m);
+  }, [trips]);
+
+  const totalDistance = trips.reduce((s: number, t: any) => s + Number(t.distance_km || 0), 0);
+
+  const busiestDay = useMemo(() => {
+    const m: Record<string, number> = {};
+    trips.forEach((t: any) => { const d = t.trip_date || ''; m[d] = (m[d] || 0) + 1; });
+    const entries = Object.entries(m).sort((a, b) => b[1] - a[1]);
+    return entries.length > 0 ? entries[0] : null;
+  }, [trips]);
+
+  const totalFuelExp = fuel.reduce((s: number, f: any) => s + Number(f.expected_litres || 0), 0);
+  const totalFuelAct = fuel.reduce((s: number, f: any) => s + Number(f.actual_litres || 0), 0);
+  const fuelVariance = totalFuelAct - totalFuelExp;
+  const totalFuelCost = fuel.reduce((s: number, f: any) => s + Number(f.total_cost || 0), 0);
+  const avgCostPerTrip = fuel.length > 0 ? totalFuelCost / fuel.length : 0;
+
+  const fuelByTruck = useMemo(() => {
+    const m: Record<string, { plate: string; exp: number; act: number }> = {};
+    fuel.forEach((f: any) => {
+      const p = f.vehicle?.plate_number || 'Unassigned';
+      if (!m[p]) m[p] = { plate: p, exp: 0, act: 0 };
+      m[p].exp += Number(f.expected_litres || 0);
+      m[p].act += Number(f.actual_litres || 0);
+    });
+    return Object.values(m);
+  }, [fuel]);
+
+  const totalNetTallage = tallies.reduce((s: number, t: any) => s + Number(t.net_tallage || 0), 0);
+  const talliesByTruck = useMemo(() => {
+    const m: Record<string, { plate: string; total: number }> = {};
+    tallies.forEach((t: any) => {
+      const p = t.vehicle?.plate_number || 'Unassigned';
+      if (!m[p]) m[p] = { plate: p, total: 0 };
+      m[p].total += Number(t.net_tallage || 0);
+    });
+    return Object.values(m);
+  }, [tallies]);
+
+  const talliesByArea = useMemo(() => {
+    const m: Record<string, number> = {};
+    tallies.forEach((t: any) => {
+      const a = t.mcl_area_id || 'Other';
+      m[a] = (m[a] || 0) + Number(t.net_tallage || 0);
+    });
+    return Object.entries(m);
+  }, [tallies]);
+
+  const totalMileage = trips.reduce((s: number, t: any) => s + Number(t.mileage_payment || 0), 0);
+  const mileageByDriver = useMemo(() => {
+    const m: Record<string, number> = {};
+    trips.forEach((t: any) => {
+      const n = t.driver?.name || 'Unassigned';
+      m[n] = (m[n] || 0) + Number(t.mileage_payment || 0);
+    });
+    return Object.entries(m);
+  }, [trips]);
+  
+  const mileageByRoute = useMemo(() => {
+    const m: Record<string, number> = {};
+    trips.forEach((t: any) => {
+      const r = `${t.departure_point || '—'} → ${t.arrival_point || '—'}`;
+      m[r] = (m[r] || 0) + Number(t.mileage_payment || 0);
+    });
+    return Object.entries(m);
+  }, [trips]);
+
+  const partsInUse = parts.filter((p: any) => p.status === 'in_use');
+  const partsInStore = parts.filter((p: any) => p.status === 'in_store');
+  const partsUnderRepair = parts.filter((p: any) => p.status === 'under_repair');
+  const partsRetired = parts.filter((p: any) => p.status === 'retired');
+
+  const contActive = containers.filter((c: any) => c.status === 'active');
+  const contReturned = containers.filter((c: any) => c.status === 'returned');
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const contOverdue = contActive.filter((c: any) => c.detention_validity && new Date(c.detention_validity) < today);
+  const contExpiring = contActive.filter((c: any) => {
+    if (!c.detention_validity) return false;
+    const d = new Date(c.detention_validity);
+    const diff = (d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
+    return diff >= 0 && diff <= 7;
+  });
+
+  const now = new Date();
+  const in30 = new Date(now.getTime() + 30 * 86400000);
+  const complianceExpiring: string[] = [];
+  const complianceExpired: string[] = [];
+
+  if (data) {
+    data.vehicleCompliance.forEach((vc: any) => {
+      if (!vc.expiry_date) return;
+      const d = new Date(vc.expiry_date);
+      const label = `${vc.vehicle?.plate_number || 'Unknown'}: ${(vc.compliance_type || '').replace(/_/g, ' ')}`;
+      if (d < now) complianceExpired.push(`${label} (expired ${vc.expiry_date})`);
+      else if (d <= in30) complianceExpiring.push(`${label} (expiring ${vc.expiry_date})`);
+    });
+    data.driverCompliance.forEach((dc: any) => {
+      if (!dc.expiry_date) return;
+      const d = new Date(dc.expiry_date);
+      const label = `${dc.driver?.name || 'Unknown'}: ${(dc.compliance_type || '').replace(/_/g, ' ')}`;
+      if (d < now) complianceExpired.push(`${label} (expired ${dc.expiry_date})`);
+      else if (d <= in30) complianceExpiring.push(`${label} (expiring ${dc.expiry_date})`);
+    });
+  }
+
+  const lwStart = lastWeek.start.getTime();
+  const lwEnd = lastWeek.end.getTime();
+  const cwEnd = currentWeek.end.getTime();
+  const expiredThisWeek: string[] = [];
+  const expiringNextWeek: string[] = [];
+
+  const checkWeekly = (expiryDate: string | null, label: string) => {
+    if (!expiryDate) return;
+    const t = new Date(expiryDate).getTime();
+    if (t >= lwStart && t <= lwEnd) expiredThisWeek.push(`${label} (${expiryDate})`);
+    else if (t > lwEnd && t <= cwEnd) expiringNextWeek.push(`${label} (${expiryDate})`);
+  };
+
+  if (data) {
+    data.vehicleCompliance.forEach((vc: any) => {
+      if (!vc.expiry_date) return;
+      checkWeekly(vc.expiry_date, `${vc.vehicle?.plate_number || 'Unknown'}: ${(vc.compliance_type || '').replace(/_/g, ' ')}`);
+    });
+    data.driverCompliance.forEach((dc: any) => {
+      if (!dc.expiry_date) return;
+      checkWeekly(dc.expiry_date, `${dc.driver?.name || 'Unknown'}: ${(dc.compliance_type || '').replace(/_/g, ' ')}`);
+    });
+  }
+
+  // EARLY RETURNS placed safely AFTER all hooks are declared
+  if (loading && !data) return <LoadingSpinner message="Loading report data..." />;
+  if (!data) return <div className="card"><EmptyState icon={<FileText className="h-8 w-8" />} title="No data" message="No data available for the selected period." /></div>;
 
   const quickButton = (label: string, from: Date, to: Date) => (
     <button
@@ -158,192 +339,8 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
     showToast('Weekly report marked as reviewed', 'success');
   };
 
-  if (loading && !data) return <LoadingSpinner message="Loading report data..." />;
-  if (!data) return <div className="card"><EmptyState icon={<FileText className="h-8 w-8" />} title="No data" message="No data available for the selected period." /></div>;
-
-  const trips = data.trips;
-  const fuel = data.fuel;
-  const tallies = data.tallies;
-  const parts = data.spareParts;
-  const containers = data.containers;
-
-  // Tyre metrics
-  const tyreCostPerTruck = useMemo(() => {
-    const m: Record<string, { plate: string; cost: number }> = {};
-    tyresData.forEach(t => {
-      const plate = t.vehicle?.plate_number || 'Unassigned';
-      if (!m[plate]) m[plate] = { plate, cost: 0 };
-      m[plate].cost += Number(t.cost || 0);
-    });
-    return Object.values(m);
-  }, [tyresData]);
-
-  const avgTyreKm = tyresData.length > 0 ? Math.round(tyresData.reduce((s, t) => s + Number(t.total_km || 0), 0) / tyresData.length) : 0;
-  const fittedThisMonth = tyresData.filter(t => t.status === 'in_use').length;
-  const removedThisMonth = tyresData.filter(t => t.status === 'retired').length;
-
-  const retirementReasons = useMemo(() => {
-    const m: Record<string, number> = {};
-    tyresData.filter(t => t.status === 'retired').forEach(t => {
-      const reason = t.retirement_reason || 'Normal Wear';
-      m[reason] = (m[reason] || 0) + 1;
-    });
-    return Object.entries(m);
-  }, [tyresData]);
-
-  // Section 1: Trips
-  const tripsByTruck = useMemo(() => {
-    const m: Record<string, { plate: string; count: number }> = {};
-    trips.forEach((t: any) => {
-      const p = t.vehicle?.plate_number || 'Unassigned';
-      if (!m[p]) m[p] = { plate: p, count: 0 };
-      m[p].count++;
-    });
-    return Object.values(m);
-  }, [trips]);
-
-  const tripsByDriver = useMemo(() => {
-    const m: Record<string, { name: string; count: number; mileage: number }> = {};
-    trips.forEach((t: any) => {
-      const n = t.driver?.name || 'Unassigned';
-      if (!m[n]) m[n] = { name: n, count: 0, mileage: 0 };
-      m[n].count++;
-      m[n].mileage += Number(t.mileage_payment || 0);
-    });
-    return Object.values(m);
-  }, [trips]);
-
-  const totalDistance = trips.reduce((s: number, t: any) => s + Number(t.distance_km || 0), 0);
-
-  const busiestDay = useMemo(() => {
-    const m: Record<string, number> = {};
-    trips.forEach((t: any) => { const d = t.trip_date || ''; m[d] = (m[d] || 0) + 1; });
-    const entries = Object.entries(m).sort((a, b) => b[1] - a[1]);
-    return entries.length > 0 ? entries[0] : null;
-  }, [trips]);
-
-  // Section 2: Fuel
-  const totalFuelExp = fuel.reduce((s: number, f: any) => s + Number(f.expected_litres || 0), 0);
-  const totalFuelAct = fuel.reduce((s: number, f: any) => s + Number(f.actual_litres || 0), 0);
-  const fuelVariance = totalFuelAct - totalFuelExp;
-  const totalFuelCost = fuel.reduce((s: number, f: any) => s + Number(f.total_cost || 0), 0);
-  const avgCostPerTrip = fuel.length > 0 ? totalFuelCost / fuel.length : 0;
-
-  const fuelByTruck = useMemo(() => {
-    const m: Record<string, { plate: string; exp: number; act: number }> = {};
-    fuel.forEach((f: any) => {
-      const p = f.vehicle?.plate_number || 'Unassigned';
-      if (!m[p]) m[p] = { plate: p, exp: 0, act: 0 };
-      m[p].exp += Number(f.expected_litres || 0);
-      m[p].act += Number(f.actual_litres || 0);
-    });
-    return Object.values(m);
-  }, [fuel]);
-
-  // Section 3: Tallies
-  const totalNetTallage = tallies.reduce((s: number, t: any) => s + Number(t.net_tallage || 0), 0);
-  const talliesByTruck = useMemo(() => {
-    const m: Record<string, { plate: string; total: number }> = {};
-    tallies.forEach((t: any) => {
-      const p = t.vehicle?.plate_number || 'Unassigned';
-      if (!m[p]) m[p] = { plate: p, total: 0 };
-      m[p].total += Number(t.net_tallage || 0);
-    });
-    return Object.values(m);
-  }, [tallies]);
-
-  const talliesByArea = useMemo(() => {
-    const m: Record<string, number> = {};
-    tallies.forEach((t: any) => {
-      const a = t.mcl_area_id || 'Other';
-      m[a] = (m[a] || 0) + Number(t.net_tallage || 0);
-    });
-    return Object.entries(m);
-  }, [tallies]);
-
-  // Section 4: Mileage
-  const totalMileage = trips.reduce((s: number, t: any) => s + Number(t.mileage_payment || 0), 0);
-  const mileageByDriver = useMemo(() => {
-    const m: Record<string, number> = {};
-    trips.forEach((t: any) => {
-      const n = t.driver?.name || 'Unassigned';
-      m[n] = (m[n] || 0) + Number(t.mileage_payment || 0);
-    });
-    return Object.entries(m);
-  }, [trips]);
-  const mileageByRoute = useMemo(() => {
-    const m: Record<string, number> = {};
-    trips.forEach((t: any) => {
-      const r = `${t.departure_point || '—'} → ${t.arrival_point || '—'}`;
-      m[r] = (m[r] || 0) + Number(t.mileage_payment || 0);
-    });
-    return Object.entries(m);
-  }, [trips]);
-
-  // Section 5: Spare Parts
-  const partsInUse = parts.filter((p: any) => p.status === 'in_use');
-  const partsInStore = parts.filter((p: any) => p.status === 'in_store');
-  const partsUnderRepair = parts.filter((p: any) => p.status === 'under_repair');
-  const partsRetired = parts.filter((p: any) => p.status === 'retired');
-
-  // Section 6: Containers
-  const contActive = containers.filter((c: any) => c.status === 'active');
-  const contReturned = containers.filter((c: any) => c.status === 'returned');
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const contOverdue = contActive.filter((c: any) => c.detention_validity && new Date(c.detention_validity) < today);
-  const contExpiring = contActive.filter((c: any) => {
-    if (!c.detention_validity) return false;
-    const d = new Date(c.detention_validity);
-    const diff = (d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24);
-    return diff >= 0 && diff <= 7;
-  });
-
-  // Section 7: Compliance
-  const now = new Date();
-  const in30 = new Date(now.getTime() + 30 * 86400000);
-  const complianceExpiring: string[] = [];
-  const complianceExpired: string[] = [];
-
-  data.vehicleCompliance.forEach((vc: any) => {
-    if (!vc.expiry_date) return;
-    const d = new Date(vc.expiry_date);
-    const label = `${vc.vehicle?.plate_number || 'Unknown'}: ${(vc.compliance_type || '').replace(/_/g, ' ')}`;
-    if (d < now) complianceExpired.push(`${label} (expired ${vc.expiry_date})`);
-    else if (d <= in30) complianceExpiring.push(`${label} (expiring ${vc.expiry_date})`);
-  });
-  data.driverCompliance.forEach((dc: any) => {
-    if (!dc.expiry_date) return;
-    const d = new Date(dc.expiry_date);
-    const label = `${dc.driver?.name || 'Unknown'}: ${(dc.compliance_type || '').replace(/_/g, ' ')}`;
-    if (d < now) complianceExpired.push(`${label} (expired ${dc.expiry_date})`);
-    else if (d <= in30) complianceExpiring.push(`${label} (expiring ${dc.expiry_date})`);
-  });
-
-  const lwStart = lastWeek.start.getTime();
-  const lwEnd = lastWeek.end.getTime();
-  const cwEnd = currentWeek.end.getTime();
-  const expiredThisWeek: string[] = [];
-  const expiringNextWeek: string[] = [];
-
-  const checkWeekly = (expiryDate: string | null, label: string) => {
-    if (!expiryDate) return;
-    const t = new Date(expiryDate).getTime();
-    if (t >= lwStart && t <= lwEnd) expiredThisWeek.push(`${label} (${expiryDate})`);
-    else if (t > lwEnd && t <= cwEnd) expiringNextWeek.push(`${label} (${expiryDate})`);
-  };
-
-  data.vehicleCompliance.forEach((vc: any) => {
-    if (!vc.expiry_date) return;
-    checkWeekly(vc.expiry_date, `${vc.vehicle?.plate_number || 'Unknown'}: ${(vc.compliance_type || '').replace(/_/g, ' ')}`);
-  });
-  data.driverCompliance.forEach((dc: any) => {
-    if (!dc.expiry_date) return;
-    checkWeekly(dc.expiry_date, `${dc.driver?.name || 'Unknown'}: ${(dc.compliance_type || '').replace(/_/g, ' ')}`);
-  });
-
   return (
     <div className="space-y-5 animate-fade-in">
-      {/* Saturday Banner */}
       {saturday && !reviewed && (
         <div
           className="rounded-xl p-4 flex items-center justify-between cursor-pointer transition-opacity hover:opacity-95"
@@ -364,7 +361,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         </div>
       )}
 
-      {/* Month-end Banner */}
       {monthStart && (
         <div className="rounded-xl bg-slate-800 text-white p-4 flex items-center gap-3">
           <Calendar className="h-5 w-5" />
@@ -372,7 +368,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         </div>
       )}
 
-      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm" style={{ background: portalColor }}>
@@ -394,7 +389,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         </button>
       </div>
 
-      {/* Filters */}
       <div className="card p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mr-1">Quick:</span>
@@ -433,7 +427,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         </div>
       </div>
 
-      {/* Report Sections */}
       <CollapsibleSection title={`1. Trips Summary (${trips.length} trips)`} icon={<Route className="h-4 w-4" />}>
         <StatRow label="Total Trips" value={String(trips.length)} highlight="green" />
         <StatRow label="Total Distance" value={`${totalDistance.toLocaleString()} km`} />
@@ -523,7 +516,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
         )}
       </CollapsibleSection>
 
-      {/* Weekly Report Modal */}
       <Modal open={weeklyModalOpen} onClose={() => setWeeklyModalOpen(false)} title={`Weekly Report — ${lastWeek.label}`} size="lg">
         <div className="space-y-4 max-h-[60vh] overflow-y-auto">
           <div className="rounded-lg bg-slate-50 border border-slate-200 p-3">
