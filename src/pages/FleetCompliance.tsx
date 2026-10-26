@@ -1,9 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { ShieldCheck, AlertTriangle, Bell, Edit, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
+import { BulkImportModal } from '@/components/BulkImportModal';
+import { SubAccount } from '@/lib/portals';
 
 interface ComplianceRecord {
   id: string;
@@ -50,14 +53,17 @@ function StatusBadge({ date }: { date: string }) {
   return <span className="badge-success">{date}</span>;
 }
 
-export function FleetCompliance() {
+export function FleetCompliance({ portalColor = '#0f172a' }: { portalColor?: string }) {
+  const { profile } = useAuth();
+  const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'mcl') as SubAccount;
+
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<ComplianceRecord[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const emptyForm = {
     vehicle_id: '',
@@ -108,61 +114,6 @@ export function FleetCompliance() {
     loadData();
   };
 
-  // Handle Bulk Upload CSV
-  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      if (lines.length < 2) {
-        alert('The CSV file is empty or formatted incorrectly.');
-        return;
-      }
-
-      const headers = lines[0].split(',').map(h => h.trim());
-      let successCount = 0;
-
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim());
-        const rowData: Record<string, string> = {};
-        headers.forEach((h, index) => {
-          rowData[h] = values[index] || '';
-        });
-
-        const plateNumber = rowData['plate_number'];
-        if (!plateNumber) continue;
-
-        // Find vehicle ID by plate number
-        const matchedVehicle = vehicles.find(v => v.plate_number.toLowerCase() === plateNumber.toLowerCase());
-        if (matchedVehicle) {
-          const payload = {
-            vehicle_id: matchedVehicle.id,
-            insurance_start: rowData['insurance_start'] || null,
-            insurance_expiry: rowData['insurance_expiry'] || null,
-            comesa_start: rowData['comesa_start'] || null,
-            comesa_expiry: rowData['comesa_expiry'] || null,
-            ntsa_inspection_start: rowData['ntsa_inspection_start'] || null,
-            ntsa_inspection_expiry: rowData['ntsa_inspection_expiry'] || null,
-            truck_insurance_start: rowData['truck_insurance_start'] || null,
-            truck_insurance_expiry: rowData['truck_insurance_expiry'] || null,
-            trailer_insurance_start: rowData['trailer_insurance_start'] || null,
-            trailer_insurance_expiry: rowData['trailer_insurance_expiry'] || null,
-          };
-          await supabase.from('vehicle_compliance').insert(payload);
-          successCount++;
-        }
-      }
-
-      alert(`Successfully imported ${successCount} compliance record(s)!`);
-      loadData();
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsText(file);
-  };
-
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -170,15 +121,17 @@ export function FleetCompliance() {
           title="Fleet Compliance & Insurance" 
           subtitle="Monitor Insurance, COMESA, NTSA Inspections, Truck & Trailer Expirations" 
           icon={<ShieldCheck className="h-6 w-6" />} 
+          iconColor={portalColor}
           onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
           addLabel="Add Compliance Record"
-          templateName="vehicle_compliance"
         />
         <div className="flex items-center gap-2">
-          <button onClick={() => fileInputRef.current?.click()} className="btn-primary flex items-center gap-1.5 text-xs">
-            <Upload className="h-4 w-4" /> Bulk Upload CSV
+          <button 
+            onClick={() => setIsBulkOpen(true)} 
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+          >
+            <Upload className="h-4 w-4 text-slate-500" /> Bulk Import
           </button>
-          <input type="file" ref={fileInputRef} onChange={handleBulkUpload} accept=".csv" className="hidden" />
         </div>
       </div>
 
@@ -198,7 +151,7 @@ export function FleetCompliance() {
         <LoadingSpinner message="Loading compliance records..." />
       ) : records.length === 0 ? (
         <div className="card">
-          <EmptyState icon={<ShieldCheck className="h-8 w-8" />} title="No compliance logs found" message="Add compliance schedules manually or use bulk upload." />
+          <EmptyState icon={<ShieldCheck className="h-8 w-8" />} title="No compliance logs found" message="Add compliance schedules manually or use bulk import." />
         </div>
       ) : (
         <div className="card table-wrapper">
@@ -297,6 +250,29 @@ export function FleetCompliance() {
           <button onClick={saveRecord} disabled={saving || !form.vehicle_id} className="btn-primary">{saving ? 'Saving...' : 'Save Compliance'}</button>
         </div>
       </Modal>
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        open={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        tableName="vehicle_compliance"
+        portalColor={portalColor}
+        subAccount={subAccount}
+        sampleColumns={[
+          'vehicle_id',
+          'insurance_start',
+          'insurance_expiry',
+          'comesa_start',
+          'comesa_expiry',
+          'ntsa_inspection_start',
+          'ntsa_inspection_expiry',
+          'truck_insurance_start',
+          'truck_insurance_expiry',
+          'trailer_insurance_start',
+          'trailer_insurance_expiry',
+        ]}
+        onSuccess={loadData}
+      />
     </div>
   );
 }
