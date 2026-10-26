@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Users, Plus, Search, Phone, CreditCard, Award, CheckCircle, XCircle, Trash2, Edit, Shield } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Users, Plus, Search, Phone, CreditCard, Award, CheckCircle, XCircle, Trash2, Edit, Shield, Upload } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { SubAccount } from '@/lib/portals';
@@ -7,6 +7,7 @@ import { useToast } from '@/components/Toast';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { Driver } from '@/types';
+import { BulkImportModal } from '@/components/BulkImportModal';
 
 export function DriversPage({ portalColor, isMaster }: { portalColor: string; isMaster?: boolean }) {
   const { profile } = useAuth();
@@ -17,6 +18,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
 
   // Form State
@@ -28,7 +30,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
   const [shaNumber, setShaNumber] = useState('');
   const [status, setStatus] = useState<'active' | 'inactive'>('active');
 
-  const fetchDrivers = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     let query = supabase.from('drivers').select('*').order('name', { ascending: true });
     if (!isMaster && subAccount !== 'master') {
@@ -41,11 +43,11 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
       setDrivers(data || []);
     }
     setLoading(false);
-  };
+  }, [subAccount, isMaster, showToast]);
 
   useEffect(() => {
-    fetchDrivers();
-  }, [subAccount, isMaster]);
+    loadData();
+  }, [loadData]);
 
   const handleOpenAddModal = () => {
     setEditingDriver(null);
@@ -96,7 +98,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
       } else {
         showToast('Driver updated successfully', 'success');
         setIsModalOpen(false);
-        fetchDrivers();
+        loadData();
       }
     } else {
       const { error } = await supabase.from('drivers').insert([payload]);
@@ -105,7 +107,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
       } else {
         showToast('Driver added successfully', 'success');
         setIsModalOpen(false);
-        fetchDrivers();
+        loadData();
       }
     }
   };
@@ -117,7 +119,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
       showToast('Failed to delete driver', 'error');
     } else {
       showToast('Driver deleted', 'success');
-      fetchDrivers();
+      loadData();
     }
   };
 
@@ -147,16 +149,27 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
           </div>
         </div>
 
-        {!isMaster && (
-          <button
-            onClick={handleOpenAddModal}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white rounded-lg shadow-sm transition-opacity hover:opacity-90"
-            style={{ background: portalColor }}
-          >
-            <Plus className="h-4 w-4" />
-            Add Driver
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!isMaster && (
+            <button
+              onClick={() => setIsBulkOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+            >
+              <Upload className="h-4 w-4 text-slate-500" />
+              Bulk Import
+            </button>
+          )}
+          {!isMaster && (
+            <button
+              onClick={handleOpenAddModal}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white rounded-lg shadow-sm transition-opacity hover:opacity-90"
+              style={{ background: portalColor }}
+            >
+              <Plus className="h-4 w-4" />
+              Add Driver
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search Filter Bar */}
@@ -294,6 +307,17 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
           </div>
         </form>
       </Modal>
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        open={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        tableName="drivers"
+        portalColor={portalColor}
+        subAccount={subAccount}
+        sampleColumns={['name', 'phone', 'id_number', 'license_number', 'nssf_number', 'sha_number', 'status']}
+        onSuccess={loadData}
+      />
     </div>
   );
 }
