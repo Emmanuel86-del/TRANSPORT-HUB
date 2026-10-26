@@ -1,9 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { UserCheck, AlertTriangle, Bell, Edit, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
+import { BulkImportModal } from '@/components/BulkImportModal';
+import { SubAccount } from '@/lib/portals';
 
 interface DriverComplianceRecord {
   id: string;
@@ -46,14 +49,17 @@ function StatusBadge({ date }: { date: string }) {
   return <span className="badge-success">{date}</span>;
 }
 
-export function DriverCompliance() {
+export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: string }) {
+  const { profile } = useAuth();
+  const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'mcl') as SubAccount;
+
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<DriverComplianceRecord[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const emptyForm = {
     driver_id: '',
@@ -100,56 +106,6 @@ export function DriverCompliance() {
     loadData();
   };
 
-  // Handle Driver Bulk Upload CSV
-  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      if (lines.length < 2) {
-        alert('The CSV file is empty or formatted incorrectly.');
-        return;
-      }
-
-      const headers = lines[0].split(',').map(h => h.trim());
-      let successCount = 0;
-
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim());
-        const rowData: Record<string, string> = {};
-        headers.forEach((h, index) => {
-          rowData[h] = values[index] || '';
-        });
-
-        const phone = rowData['driver_phone'];
-        if (!phone) continue;
-
-        const matchedDriver = drivers.find(d => d.phone.includes(phone));
-        if (matchedDriver) {
-          const payload = {
-            driver_id: matchedDriver.id,
-            license_start: rowData['license_start'] || null,
-            license_expiry: rowData['license_expiry'] || null,
-            compliance_start: rowData['compliance_start'] || null,
-            compliance_expiry: rowData['compliance_expiry'] || null,
-            atic_insurance_start: rowData['atic_insurance_start'] || null,
-            atic_insurance_expiry: rowData['atic_insurance_expiry'] || null,
-          };
-          await supabase.from('driver_compliance').insert(payload);
-          successCount++;
-        }
-      }
-
-      alert(`Successfully imported ${successCount} driver compliance record(s)!`);
-      loadData();
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-    reader.readAsText(file);
-  };
-
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -157,15 +113,17 @@ export function DriverCompliance() {
           title="Driver Compliance & Licensing" 
           subtitle="Monitor Driver's Licenses, Compliance Documents, and ATIC Insurance Expirations" 
           icon={<UserCheck className="h-6 w-6" />} 
+          iconColor={portalColor}
           onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
           addLabel="Add Driver Compliance"
-          templateName="driver_compliance"
         />
         <div className="flex items-center gap-2">
-          <button onClick={() => fileInputRef.current?.click()} className="btn-primary flex items-center gap-1.5 text-xs">
-            <Upload className="h-4 w-4" /> Bulk Upload CSV
+          <button 
+            onClick={() => setIsBulkOpen(true)} 
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+          >
+            <Upload className="h-4 w-4 text-slate-500" /> Bulk Import
           </button>
-          <input type="file" ref={fileInputRef} onChange={handleBulkUpload} accept=".csv" className="hidden" />
         </div>
       </div>
 
@@ -185,7 +143,7 @@ export function DriverCompliance() {
         <LoadingSpinner message="Loading driver compliance records..." />
       ) : records.length === 0 ? (
         <div className="card">
-          <EmptyState icon={<UserCheck className="h-8 w-8" />} title="No driver compliance logs found" message="Add compliance schedules manually or use bulk upload." />
+          <EmptyState icon={<UserCheck className="h-8 w-8" />} title="No driver compliance logs found" message="Add compliance schedules manually or use bulk import." />
         </div>
       ) : (
         <div className="card table-wrapper">
@@ -262,10 +220,29 @@ export function DriverCompliance() {
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
+          <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel/Close</button>
           <button onClick={saveRecord} disabled={saving || !form.driver_id} className="btn-primary">{saving ? 'Saving...' : 'Save Driver Compliance'}</button>
         </div>
       </Modal>
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        open={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        tableName="driver_compliance"
+        portalColor={portalColor}
+        subAccount={subAccount}
+        sampleColumns={[
+          'driver_id',
+          'license_start',
+          'license_expiry',
+          'compliance_start',
+          'compliance_expiry',
+          'atic_insurance_start',
+          'atic_insurance_expiry',
+        ]}
+        onSuccess={loadData}
+      />
     </div>
   );
 }
