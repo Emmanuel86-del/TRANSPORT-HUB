@@ -47,10 +47,11 @@ function daysUntil(dateStr: string): number {
   return Math.floor((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | null; portalColor: string }) {
+export function ContainersPage({ mclArea, portalColor, isMaster = false }: { mclArea: MCLArea | null; portalColor: string; isMaster?: boolean }) {
   const { showToast } = useToast();
   const { profile } = useAuth();
   const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
+  const derivedIsMaster = isMaster || subAccount === 'master';
   const isMCL = subAccount === 'mcl';
 
   const [loading, setLoading] = useState(true);
@@ -62,6 +63,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
   const [containerDocs, setContainerDocs] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Container | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [filterSubAccount, setFilterSubAccount] = useState('');
 
   const emptyForm = {
     container_no: '',
@@ -85,26 +87,34 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    let query = supabase
+      .from('sub_account_containers')
+      .select('*, vehicle:vehicles(plate_number, make, model)')
+      .order('created_at', { ascending: false });
+
+    if (derivedIsMaster && filterSubAccount) {
+      query = query.eq('sub_account', filterSubAccount);
+    } else if (!derivedIsMaster && subAccount !== 'master') {
+      query = query.eq('sub_account', subAccount);
+    }
+
     const [contRes, vehRes] = await Promise.all([
-      supabase
-        .from('sub_account_containers')
-        .select('*, vehicle:vehicles(plate_number, make, model)')
-        .order('created_at', { ascending: false }),
+      query,
       supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
     ]);
     setContainers(contRes.data as Container[] || []);
     setVehicles(vehRes.data || []);
     setLoading(false);
-  }, []);
+  }, [derivedIsMaster, filterSubAccount, subAccount]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const visibleContainers = useMemo(() => {
-    if (isMCL && mclArea) {
+    if (isMCL && mclArea && !derivedIsMaster) {
       return containers.filter(c => c.mcl_area_id === mclArea);
     }
     return containers;
-  }, [containers, isMCL, mclArea]);
+  }, [containers, isMCL, mclArea, derivedIsMaster]);
 
   const summary = useMemo(() => {
     const active = visibleContainers.filter(c => c.status === 'active');
@@ -141,6 +151,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
   };
 
   const openAdd = () => {
+    if (derivedIsMaster) return;
     setForm(emptyForm);
     setEditId(null);
     setContainerDocs([]);
@@ -148,6 +159,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
   };
 
   const openEdit = (c: Container) => {
+    if (derivedIsMaster) return;
     const { id, vehicle, created_at, sub_account, mcl_area_id, documents, ...rest } = c as any;
     setForm({
       ...rest,
@@ -181,6 +193,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
   };
 
   const save = async () => {
+    if (derivedIsMaster) return;
     if (!form.container_no.trim()) {
       showToast('Container number is required', 'error');
       return;
@@ -191,7 +204,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
     if (!payload.detention_validity) payload.detention_validity = null;
     if (!payload.release_date) payload.release_date = null;
     if (!payload.vehicle_id) payload.vehicle_id = null;
-    if (isMCL && mclArea) payload.mcl_area_id = mclArea;
+    if (isMCL && mclArea && !derivedIsMaster) payload.mcl_area_id = mclArea;
 
     if (editId) {
       const { error } = await supabase.from('sub_account_containers').update(payload).eq('id', editId);
@@ -208,7 +221,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget) return;
+    if (derivedIsMaster || !deleteTarget) return;
     setDeleting(true);
     const { error } = await supabase.from('sub_account_containers').delete().eq('id', deleteTarget.id);
     if (error) showToast('Failed to delete: ' + error.message, 'error');
@@ -241,13 +254,27 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
     <div className="space-y-5 animate-fade-in">
       <PageHeader
         title="Containers"
-        subtitle={isMCL && mclArea ? `MCL — ${mclArea.charAt(0).toUpperCase() + mclArea.slice(1)} area container tracking` : 'Container tracking with detention monitoring'}
+        subtitle={derivedIsMaster ? 'Master monitoring view — tracking container detention validity and shipping details across sub-accounts' : (isMCL && mclArea ? `MCL — ${mclArea.charAt(0).toUpperCase() + mclArea.slice(1)} area container tracking` : 'Container tracking with detention monitoring')}
         icon={<Package className="h-6 w-6" />}
         iconColor={portalColor}
-        onAdd={openAdd}
+        onAdd={!derivedIsMaster ? openAdd : undefined}
         addLabel="Add Container"
         templateName="containers"
       />
+
+      {/* Master Sub-Account Filter */}
+      {derivedIsMaster && (
+        <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+          <label className="text-sm font-medium text-slate-600">Filter Sub-Account:</label>
+          <select className="input w-48 text-sm py-1.5" value={filterSubAccount} onChange={e => setFilterSubAccount(e.target.value)}>
+            <option value="">All Sub-Accounts</option>
+            <option value="mcl">MCL</option>
+            <option value="tarmal">TARMAL</option>
+            <option value="csl">CSL</option>
+            <option value="mushroom">MUSHROOM</option>
+          </select>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -284,7 +311,7 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
         <LoadingSpinner message="Loading containers..." />
       ) : visibleContainers.length === 0 ? (
         <div className="card">
-          <EmptyState icon={<Package className="h-8 w-8" />} title="No containers found" message="Add a new container to start tracking detention validity and shipping details." />
+          <EmptyState icon={<Package className="h-8 w-8" />} title="No containers found" message="No container records found for the selected view." />
         </div>
       ) : (
         <div className="card table-wrapper overflow-x-auto">
@@ -300,7 +327,8 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
                 <th>Truck</th>
                 <th>Trailer</th>
                 <th>Status</th>
-                <th></th>
+                {derivedIsMaster && <th>Sub-Account</th>}
+                {!derivedIsMaster && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -326,22 +354,25 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
                     <td className="text-slate-600">{c.vehicle?.plate_number || '—'}</td>
                     <td className="text-slate-600">{c.trailer_number || '—'}</td>
                     <td>{statusBadge(c.status)}</td>
-                    <td>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(c)}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setDeleteTarget(c)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {derivedIsMaster && <td><span className="text-xs font-semibold uppercase text-slate-500">{c.sub_account}</span></td>}
+                    {!derivedIsMaster && (
+                      <td>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openEdit(c)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(c)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -350,104 +381,107 @@ export function ContainersPage({ mclArea, portalColor }: { mclArea: MCLArea | nu
         </div>
       )}
 
-      {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Container' : 'Add Container'} size="xl">
-        <div className="space-y-4">
-          {/* Document Scanner */}
-          <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Scan Document (Google Document AI)
-            </p>
-            <DocumentScanner onScanComplete={handleScanComplete} buttonLabel="Scan Shipping Document" />
-          </div>
+      {/* Add/Edit Modal (Only if not Master) */}
+      {!derivedIsMaster && (
+        <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Container' : 'Add Container'} size="xl">
+          <div className="space-y-4">
+            <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Scan Document (Google Document AI)
+              </p>
+              <DocumentScanner onScanComplete={handleScanComplete} buttonLabel="Scan Shipping Document" />
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {field('container_no', 'Container No *')}
-            {field('size', 'Size')}
-            {field('shipping_line', 'Shipping Line')}
-            {field('agent_name', 'Agent Name')}
-            {field('consignee', 'Consignee')}
-            {field('bl_no', 'B/L No')}
-            {field('vessel_voyage', 'Vessel/Voyage')}
-            {field('eta', 'ETA', 'date')}
-            {field('destination', 'Destination')}
-            {field('detention_validity', 'Detention Validity', 'date')}
-            {field('release_date', 'Release Date', 'date')}
-            {field('trailer_number', 'Trailer Number')}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {field('container_no', 'Container No *')}
+              {field('size', 'Size')}
+              {field('shipping_line', 'Shipping Line')}
+              {field('agent_name', 'Agent Name')}
+              {field('consignee', 'Consignee')}
+              {field('bl_no', 'B/L No')}
+              {field('vessel_voyage', 'Vessel/Voyage')}
+              {field('eta', 'ETA', 'date')}
+              {field('destination', 'Destination')}
+              {field('detention_validity', 'Detention Validity', 'date')}
+              {field('release_date', 'Release Date', 'date')}
+              {field('trailer_number', 'Trailer Number')}
 
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Truck</label>
-              <select
-                className="input text-sm"
-                value={form.vehicle_id}
-                onChange={e => setForm(prev => ({ ...prev, vehicle_id: e.target.value }))}
-              >
-                <option value="">— Select Truck —</option>
-                {vehicles.map(v => (
-                  <option key={v.id} value={v.id}>{v.plate_number}</option>
-                ))}
-              </select>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Truck</label>
+                <select
+                  className="input text-sm"
+                  value={form.vehicle_id}
+                  onChange={e => setForm(prev => ({ ...prev, vehicle_id: e.target.value }))}
+                >
+                  <option value="">— Select Truck —</option>
+                  {vehicles.map(v => (
+                    <option key={v.id} value={v.id}>{v.plate_number}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+                <select
+                  className="input text-sm"
+                  value={form.status}
+                  onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
+                >
+                  {STATUS_OPTIONS.map(s => (
+                    <option key={s.value} value={s.value}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
-              <select
-                className="input text-sm"
-                value={form.status}
-                onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}
-              >
-                {STATUS_OPTIONS.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
+              <textarea
+                className="input text-sm min-h-[60px]"
+                value={form.notes}
+                onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
+              />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-            <textarea
-              className="input text-sm min-h-[60px]"
-              value={form.notes}
-              onChange={e => setForm(prev => ({ ...prev, notes: e.target.value }))}
+            <DocumentUpload
+              folder="sub_account_containers"
+              recordId={editId || 'unsaved'}
+              existingDocs={containerDocs}
+              onDocsChange={setContainerDocs}
             />
-          </div>
 
-          <DocumentUpload
-            folder="sub_account_containers"
-            recordId={editId || 'unsaved'}
-            existingDocs={containerDocs}
-            onDocsChange={setContainerDocs}
-          />
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
-            <button onClick={save} disabled={saving} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
-              {saving ? 'Saving...' : editId ? 'Update Container' : 'Create Container'}
-            </button>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
+              <button onClick={save} disabled={saving} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
+                {saving ? 'Saving...' : editId ? 'Update Container' : 'Create Container'}
+              </button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Delete Confirmation */}
-      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Container" size="sm">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
-              <Trash2 className="h-5 w-5 text-red-600" />
+      {!derivedIsMaster && (
+        <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete Container" size="sm">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Delete this container?</p>
+                <p className="text-xs text-slate-500">{deleteTarget?.container_no} — This action cannot be undone.</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Delete this container?</p>
-              <p className="text-xs text-slate-500">{deleteTarget?.container_no} — This action cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} className="btn-secondary">Cancel</button>
+              <button onClick={confirmDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {deleting ? 'Deleting...' : 'Delete'}
+              </button>
             </div>
           </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setDeleteTarget(null)} className="btn-secondary">Cancel</button>
-            <button onClick={confirmDelete} disabled={deleting} className="btn-primary bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
-              {deleting ? 'Deleting...' : 'Delete'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
     </div>
   );
 }
