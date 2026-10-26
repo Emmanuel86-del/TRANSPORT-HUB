@@ -21,7 +21,7 @@ export type PortalConfig = {
 };
 
 export type TabId =
-  | 'live-monitor' | 'dashboard' | 'trips' | 'fuel' | 'tallies'
+  | 'live-monitor' | 'dashboard' | 'trips' | 'fuel' | 'tallies' | 'drivers'
   | 'spare-parts' | 'containers' | 'reports' | 'overview' | 'tyres'
   | 'mcl' | 'tarmal' | 'csl' | 'mushroom' | 'users' | 'compliance';
 
