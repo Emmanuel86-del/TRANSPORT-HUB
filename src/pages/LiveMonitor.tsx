@@ -31,7 +31,6 @@ const SUB_ACCOUNT_OPTIONS: { value: string; label: string }[] = [
   { value: 'mushroom', label: 'MUSHROOM' },
 ];
 
-// Define Sub-Account Centers & Map Coordinates
 const PORTAL_LOCATIONS: Record<string, { center: [number, number]; zoom: number; geofences: any[] }> = {
   mcl: {
     center: [-3.9630, 39.7500],
@@ -150,14 +149,16 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [trips, setTrips] = useState<TripWithRelations[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecordWithVehicle[]>([]);
-  const [subFilter, setSubFilter] = useState<string>('all');
+  
+  // Initialize state immediately from forcedFilter to avoid async flicker
+  const [subFilter, setSubFilter] = useState<string>(forcedFilter ?? 'all');
+  
   const [activeCard, setActiveCard] = useState<CardKey | null>(null);
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   const [selectedTrip, setSelectedTrip] = useState<TripWithRelations | null>(null);
   const [mapToggle, setMapToggle] = useState<'satellite' | 'map'>('satellite');
   const [complianceDue, setComplianceDue] = useState<{ labels: string[]; count: number }>({ labels: [], count: 0 });
 
-  // Map Search States
   const [mapSearchQuery, setMapSearchQuery] = useState('');
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
 
@@ -166,7 +167,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const markersRef = useRef<{ marker: any; plate: string }[]>([]);
   const layersRef = useRef<any[]>([]);
 
-  const isMaster = profile?.sub_account === 'master' || profile?.sub_account === null;
+  const isMaster = forcedFilter === 'all' || profile?.sub_account === 'master' || profile?.sub_account === null;
   const effectiveFilter = forcedFilter ?? (isMaster ? subFilter : profile?.sub_account ?? 'all');
   const currentConfig = PORTAL_LOCATIONS[effectiveFilter.toLowerCase()] || PORTAL_LOCATIONS.all;
 
@@ -532,7 +533,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
   };
 
-  // Reset view to the current sub-account's dynamic center and zoom level
   const resetMapView = () => {
     mapInstanceRef.current?.setView(currentConfig.center, currentConfig.zoom);
   };
@@ -544,14 +544,11 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     map.fitBounds(group.getBounds(), { padding: [50, 50], maxZoom: 15 });
   };
 
-  // Search local fleet units or world locations
   const handleMapSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mapSearchQuery.trim() || !mapInstanceRef.current) return;
 
     const query = mapSearchQuery.trim().toLowerCase();
-
-    // 1. Check if query matches a local unit / truck plate
     const matchedMarker = markersRef.current.find(m => m.plate.includes(query));
 
     if (matchedMarker) {
@@ -561,7 +558,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       return;
     }
 
-    // 2. Search global location using OpenStreetMap Geocoding (Nominatim)
     setIsSearchingLocation(true);
     try {
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
