@@ -137,7 +137,6 @@ function AppContent() {
         case 'overview': return <OverviewPage color={portal.color} />;
         case 'dashboard': return <OverviewPage color={portal.color} />;
         
-        // Pass unique keys so React unmounts/remounts Dashboard when switching sub-accounts
         case 'mcl': 
           return <SubAccountDashboardWrapper key="mcl" subAccount="mcl" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'tarmal': 
@@ -150,7 +149,7 @@ function AppContent() {
         case 'users': return <Users />;
         case 'spare-parts': return <SparePartsV2 mclArea={null} portalColor={portal.color} isMaster />;
         case 'tyres': return <TyresPage mclArea={null} portalColor={portal.color} isMaster />;
-        case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} />;
+        case 'containers': return <ContainersPage mclArea={null} portalColor={portal.color} isMaster />;
         case 'compliance': return <CompliancePageFull mclArea={null} portalColor={portal.color} isMaster />;
         case 'reports': return <MasterReportsPage portalColor={portal.color} />;
         default: return <OverviewPage color={portal.color} />;
