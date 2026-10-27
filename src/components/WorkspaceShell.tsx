@@ -86,6 +86,7 @@ export function WorkspaceShell({
   }, [onTabChange]);
 
   const getTableForActiveTab = (): { tableName: string; templateKey: string } => {
+    if (activeTab === 'vehicles') return { tableName: 'vehicles', templateKey: 'vehicles' }; // <-- Added Vehicles mapping
     if (activeTab === 'spare-parts') return { tableName: 'spare_parts_v2', templateKey: 'spare_parts' };
     if (activeTab === 'tyres') return { tableName: 'tyres', templateKey: 'tyres' };
     return { tableName: 'sub_account_trips', templateKey: 'trips' };
