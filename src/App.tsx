@@ -99,19 +99,6 @@ function AppContent() {
   const pathSlug = slugFromPath(window.location.pathname);
   const portal = pathSlug ? (portalFromPath(window.location.pathname) ?? PORTALS.master) : PORTALS.master;
 
-  useEffect(() => {
-    if (!pathSlug) {
-      window.location.replace('/admin');
-    }
-  }, [pathSlug]);
-
-  useEffect(() => {
-    const path = window.location.pathname.replace(/\/+$/, '');
-    if (path === '') {
-      window.location.replace('/admin');
-    }
-  }, []);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-4">
