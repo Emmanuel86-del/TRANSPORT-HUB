@@ -136,7 +136,7 @@ const labelCls = 'block text-xs font-semibold text-slate-600 mb-1';
 /* Entry point: master gets the summary only                           */
 /* ------------------------------------------------------------------ */
 
-export function TyresV2({ mclArea, portalColor, isMaster = false }: { mclArea: MCLArea | null; portalColor: string; isMaster?: boolean }) {
+export function TyresPage({ mclArea, portalColor, isMaster = false }: { mclArea: MCLArea | null; portalColor: string; isMaster?: boolean }) {
   return isMaster
     ? <TyresMasterSummary portalColor={portalColor} />
     : <TyresSubAccountView mclArea={mclArea} portalColor={portalColor} />;
