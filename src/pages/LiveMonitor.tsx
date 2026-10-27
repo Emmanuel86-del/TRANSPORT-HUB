@@ -182,8 +182,8 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
   const todayStr = now.toLocaleDateString('en-CA');
 
-  const loadData = useCallback(async (initial = false) => {
-    if (initial) setLoading(true);
+  const loadData = useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const filter = effectiveFilter;
       let tripQuery = supabase.from('trips').select('*, vehicle:vehicles(*), driver:drivers(*)').eq('trip_date', todayStr);
@@ -240,7 +240,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     } catch (err) {
       console.error('Error fetching live monitor data:', err);
     } finally {
-      if (initial) setLoading(false);
+      if (isInitial) setLoading(false);
     }
   }, [effectiveFilter, todayStr]);
 
@@ -574,14 +574,14 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }
   };
 
-  // FIXED: Automatically pan and zoom the map when effectiveFilter changes!
+  // Automatically pan, zoom, and update map layers when effectiveFilter changes
   useEffect(() => {
     if (mapInstanceRef.current) {
       updateMapLayers();
       mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
       mapInstanceRef.current.invalidateSize(true);
     }
-  }, [mapToggle, effectiveFilter]);
+  }, [effectiveFilter, mapToggle]);
 
   useEffect(() => {
     if (mapInstanceRef.current && !loading) {
