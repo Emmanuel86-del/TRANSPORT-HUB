@@ -116,17 +116,33 @@ function SparePartsMasterSummary({ portalColor }: { portalColor: string }) {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<any[]>([]);
+  const [nameRows, setNameRows] = useState<any[]>([]);
+  const [nameSearch, setNameSearch] = useState('');
+  const [nameCategory, setNameCategory] = useState('all');
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('spare_parts_summary_v').select('*');
-    if (error) {
-      console.error('Spare parts summary error:', error);
-      (showToast as any)(`Could not load spare parts summary: ${error.message}`, 'error');
+    const [sumRes, nameRes] = await Promise.all([
+      supabase.from('spare_parts_summary_v').select('*'),
+      supabase.from('spare_parts_by_name_v').select('*').order('part_name'),
+    ]);
+    const err = sumRes.error || nameRes.error;
+    if (err) {
+      console.error('Spare parts summary error:', err);
+      (showToast as any)(`Could not load spare parts summary: ${err.message}`, 'error');
     }
-    setRows(data || []);
+    setRows(sumRes.data || []);
+    setNameRows(nameRes.data || []);
     setLoading(false);
   }, [showToast]);
+
+  const visibleNames = useMemo(() => {
+    const q = nameSearch.trim().toLowerCase();
+    return nameRows.filter(r =>
+      (nameCategory === 'all' || r.category === nameCategory) &&
+      (!q || String(r.part_name || '').toLowerCase().includes(q))
+    );
+  }, [nameRows, nameSearch, nameCategory]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -227,6 +243,67 @@ function SparePartsMasterSummary({ portalColor }: { portalColor: string }) {
               </tbody>
             </table>
           </div>
+
+          {/* Parts by name */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-base font-bold text-slate-800">Parts by name</h3>
+              <p className="text-xs text-slate-500">What each spare part is, and where it sits across the sub-accounts.</p>
+            </div>
+            <div className="flex gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <input
+                  value={nameSearch}
+                  onChange={e => setNameSearch(e.target.value)}
+                  placeholder="Search part name..."
+                  className={`${inputCls} pl-9 sm:w-56`}
+                />
+              </div>
+              <select value={nameCategory} onChange={e => setNameCategory(e.target.value)} className={`${inputCls} sm:w-44`}>
+                <option value="all">All categories</option>
+                <option value="battery">Batteries & Critical</option>
+                <option value="general">General Spares</option>
+              </select>
+            </div>
+          </div>
+
+          {visibleNames.length === 0 ? (
+            <div className="card">
+              <EmptyState icon={<Package className="h-8 w-8" />} title="No parts to show" message="No spare parts match this search yet." />
+            </div>
+          ) : (
+            <div className="card table-wrapper overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Part Name</th>
+                    <th>Category</th>
+                    {SUB_ACCOUNTS.map(sa => <th key={sa.value}>{sa.label}</th>)}
+                    <th>In Store</th>
+                    <th>In Use</th>
+                    <th>Under Repair</th>
+                    <th>Retired</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleNames.map(r => (
+                    <tr key={`${r.category}:${r.part_name}`}>
+                      <td className="font-bold text-slate-800">{r.part_name}</td>
+                      <td>{r.category === 'battery' ? 'Battery / Critical' : 'General'}</td>
+                      {SUB_ACCOUNTS.map(sa => <td key={sa.value}>{r[sa.value] || 0}</td>)}
+                      <td>{r.in_store}</td>
+                      <td>{r.in_use}</td>
+                      <td>{r.under_repair}</td>
+                      <td>{r.retired}</td>
+                      <td className="font-semibold">{r.total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <p className="text-xs text-slate-500">
             Each sub-account manages its own spare parts. Open a sub-account portal to see individual parts and their history.
           </p>
@@ -409,6 +486,7 @@ function SparePartsSubAccountView({ mclArea, portalColor }: { mclArea: MCLArea |
   const savePart = async () => {
     const serial = form.serial_number.trim();
     if (!serial) { toast('Serial number is required', 'error'); return; }
+    if (!form.part_name.trim()) { toast('Part name is required', 'error'); return; }
 
     setSaving(true);
     try {
@@ -842,7 +920,7 @@ function SparePartsSubAccountView({ mclArea, portalColor }: { mclArea: MCLArea |
                 <input value={form.serial_number} onChange={e => setForm({ ...form, serial_number: e.target.value })} className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Part name</label>
+                <label className={labelCls}>Part name *</label>
                 <input value={form.part_name} onChange={e => setForm({ ...form, part_name: e.target.value })} className={inputCls} />
               </div>
               <div>
