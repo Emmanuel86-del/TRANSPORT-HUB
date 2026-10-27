@@ -967,9 +967,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
             </div>
           </div>
 
-          {/* RESTORED EXPLICIT MAP CONTAINER HEIGHT */}
+          {/* FIXED MAP CONTAINER HEIGHT */}
           <div style={{ height: '420px', width: '100%', position: 'relative' }}>
-            <div ref={mapRef} style={{ height: '420px', width: '100%', position: 'absolute', top: 0, left: 0 }} />
+            <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
           </div>
 
           <div className="flex flex-wrap items-center gap-4 px-4 py-2 text-xs" style={{ borderTop: `1px solid ${MONITOR_COLORS.border}` }}>
