@@ -30,7 +30,6 @@ export function WorkspaceShell({
   activeTab,
   onTabChange,
   children,
-  subAccountSwitcher,
 }: {
   portal: PortalConfig;
   activeTab: TabId;
@@ -46,6 +45,7 @@ export function WorkspaceShell({
 
   const allTabs = getTabsForPortal(portal.slug);
   const userRole = profile?.role ?? 'employee';
+  const isMaster = portal.slug === 'master';
 
   const navigate = (tab: TabId) => {
     if (tab === activeTab) return;
@@ -89,7 +89,6 @@ export function WorkspaceShell({
   };
 
   const currentMapping = getTableForActiveTab();
-  const isMaster = portal.slug === 'master';
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -185,7 +184,8 @@ export function WorkspaceShell({
               <Menu className="h-5 w-5" />
             </button>
 
-            {subAccountSwitcher && (
+            {/* Sub-Account Switcher dropdown (Always active on Master view) */}
+            {isMaster && (
               <div className="relative">
                 <button
                   onClick={() => setShowSwitcher(!showSwitcher)}
