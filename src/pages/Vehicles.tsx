@@ -19,7 +19,7 @@ interface Vehicle {
   sub_account: string;
 }
 
-const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom'];
+const SUB_ACCOUNTS = ['master', 'mcl', 'tarmal', 'csl', 'mushroom'];
 
 export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { portalColor?: string; isMaster?: boolean }) {
   const { profile } = useAuth();
@@ -34,7 +34,7 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
-  // Form State for Adding / Updating
+  // Form State
   const [plateNumber, setPlateNumber] = useState('');
   const [make, setMake] = useState('');
   const [model, setModel] = useState('');
@@ -44,9 +44,12 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
   const loadData = useCallback(async () => {
     setLoading(true);
     let query = supabase.from('vehicles').select('*').order('plate_number', { ascending: true });
+    
+    // If NOT master, restrict query to the user's sub-account. If master, fetch all sub-accounts.
     if (!isMaster && subAccount !== 'master') {
       query = query.eq('sub_account', subAccount);
     }
+
     const { data, error } = await query;
     if (error) {
       showToast('Failed to load trucks/vehicles', 'error');
@@ -128,12 +131,12 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
     }
   };
 
-  // 1. Overall Metrics
+  // 1. Overall Metrics across all loaded items
   const totalVehicles = vehicles.length;
   const activeCount = vehicles.filter(v => (v.status || '').toLowerCase() === 'active').length;
   const inactiveCount = vehicles.filter(v => (v.status || '').toLowerCase() !== 'active').length;
 
-  // 2. Sub-Account Summary Table Aggregations
+  // 2. Sub-Account Summary Table Aggregations (Spare Parts Style)
   const subAccountSummary = useMemo(() => {
     return SUB_ACCOUNTS.map(acc => {
       const accVehicles = vehicles.filter(v => (v.sub_account || '').toLowerCase() === acc.toLowerCase());
@@ -146,7 +149,7 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
     });
   }, [vehicles]);
 
-  // 3. Dual Filter Logic
+  // 3. Dual Filter Logic (Search text + Sub-account dropdown)
   const filteredVehicles = useMemo(() => {
     return vehicles.filter(v => {
       const matchesSearch =
@@ -197,24 +200,24 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
         </div>
       </div>
 
-      {/* Metric Stat Cards */}
+      {/* Top Stat Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card p-4">
+        <div className="card p-4 bg-white rounded-xl shadow-sm border border-slate-100">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Fleet</p>
           <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
         </div>
-        <div className="card p-4">
+        <div className="card p-4 bg-white rounded-xl shadow-sm border border-slate-100">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Inactive / Offline</p>
           <p className="text-2xl font-bold text-slate-500 mt-1">{inactiveCount}</p>
         </div>
-        <div className="card p-4">
+        <div className="card p-4 bg-white rounded-xl shadow-sm border border-slate-100">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Fleet Count</p>
           <p className="text-2xl font-bold text-slate-800 mt-1">{totalVehicles}</p>
         </div>
       </div>
 
-      {/* Sub-Account Summary Table (Spare Parts Style) */}
-      <div className="card overflow-hidden">
+      {/* Sub-Account Summary Table (Spare Parts style) */}
+      <div className="card bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-4 border-b border-slate-100 bg-slate-50/50">
           <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Sub-Account Summary</h2>
           <p className="text-xs text-slate-400 mt-0.5">Overview of active and assigned trucks across sub-accounts</p>
@@ -239,7 +242,7 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
                 </tr>
               ))}
               <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
-                <td className="px-5 py-3">All Sub-accounts</td>
+                <td className="px-5 py-3">All sub-accounts</td>
                 <td className="px-5 py-3 text-center text-emerald-600">{activeCount}</td>
                 <td className="px-5 py-3 text-center text-slate-500">{inactiveCount}</td>
                 <td className="px-5 py-3 text-center text-slate-900">{totalVehicles}</td>
@@ -250,7 +253,7 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
       </div>
 
       {/* Dual Search & Sub-Account Filter Bar */}
-      <div className="card p-4 flex flex-col md:flex-row items-center gap-3">
+      <div className="card bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center gap-3">
         <div className="relative flex-1 w-full flex items-center gap-2">
           <Search className="h-5 w-5 text-slate-400 shrink-0" />
           <input
@@ -269,7 +272,7 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
             onChange={e => setSelectedSubAccountFilter(e.target.value)}
             className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
           >
-            <option value="all font-medium">All Sub-Accounts</option>
+            <option value="all">All Sub-Accounts</option>
             {SUB_ACCOUNTS.map(acc => (
               <option key={acc} value={acc}>
                 {acc.toUpperCase()}
@@ -281,11 +284,11 @@ export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { po
 
       {/* Vehicles Table */}
       {filteredVehicles.length === 0 ? (
-        <div className="card py-12">
-          <EmptyState icon={<TruckIcon className="h-8 w-8" />} title="No trucks/vehicles found" message="No matching records found for the selected filters." />
+        <div className="card py-12 bg-white rounded-xl shadow-sm border border-slate-100">
+          <EmptyState icon={<TruckIcon className="h-8 w-8" />} title="No trucks/vehicles found" message="No matching records found for the selected search or sub-account filter." />
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
