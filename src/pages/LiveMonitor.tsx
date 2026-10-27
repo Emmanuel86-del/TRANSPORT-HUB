@@ -432,38 +432,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  useEffect(() => {
-    if (loading) return;
-
-    let cancelled = false;
-
-    loadLeaflet()
-      .then(() => {
-        if (cancelled || !mapRef.current) return;
-
-        if (!mapInstanceRef.current) {
-          mapInstanceRef.current = window.L.map(mapRef.current, {
-            center: currentConfig.center,
-            zoom: currentConfig.zoom,
-            zoomControl: true,
-          });
-        }
-
-        updateMapLayers();
-        mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
-
-        [100, 300, 600, 1000].forEach(delay =>
-          setTimeout(() => mapInstanceRef.current?.invalidateSize(true), delay)
-        );
-      })
-      .catch(err => console.error(err));
-
-    return () => {
-      cancelled = true;
-    };
-  }, [loading]);
-
-  const updateMapLayers = () => {
+  const updateMapLayers = useCallback(() => {
     if (!mapInstanceRef.current || !window.L) return;
 
     layersRef.current.forEach(l => mapInstanceRef.current.removeLayer(l));
@@ -496,9 +465,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
 
     drawMarkers();
-  };
+  }, [mapToggle, currentConfig, unitStatuses]);
 
-  const drawMarkers = () => {
+  const drawMarkers = useCallback(() => {
     if (!mapInstanceRef.current || !window.L) return;
 
     markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m.marker));
@@ -530,7 +499,35 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       marker.addTo(mapInstanceRef.current);
       markersRef.current.push({ marker, plate: u.vehicle.plate_number.toLowerCase() });
     });
-  };
+  }, [currentConfig, unitStatuses]);
+
+  // Robust Map Initialization & Update Effect
+  useEffect(() => {
+    if (loading) return;
+
+    loadLeaflet()
+      .then(() => {
+        if (!mapRef.current) return;
+
+        if (!mapInstanceRef.current) {
+          mapInstanceRef.current = window.L.map(mapRef.current, {
+            center: currentConfig.center,
+            zoom: currentConfig.zoom,
+            zoomControl: true,
+          });
+        } else {
+          mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
+        }
+
+        updateMapLayers();
+        mapInstanceRef.current.invalidateSize(true);
+
+        [100, 300, 600, 1000].forEach(delay =>
+          setTimeout(() => mapInstanceRef.current?.invalidateSize(true), delay)
+        );
+      })
+      .catch(err => console.error('Error loading leaflet map:', err));
+  }, [loading, effectiveFilter, mapToggle, updateMapLayers, currentConfig]);
 
   const resetMapView = () => {
     mapInstanceRef.current?.setView(currentConfig.center, currentConfig.zoom);
@@ -573,20 +570,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       setIsSearchingLocation(false);
     }
   };
-
-  useEffect(() => {
-    if (mapInstanceRef.current) {
-      updateMapLayers();
-      mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
-      mapInstanceRef.current.invalidateSize(true);
-    }
-  }, [effectiveFilter, mapToggle]);
-
-  useEffect(() => {
-    if (mapInstanceRef.current && !loading) {
-      drawMarkers();
-    }
-  }, [unitStatuses, loading]);
 
   const stale = isStale(lastUpdate, now);
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
