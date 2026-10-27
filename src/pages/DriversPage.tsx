@@ -36,9 +36,12 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
   const loadData = useCallback(async () => {
     setLoading(true);
     let query = supabase.from('drivers').select('*').order('name', { ascending: true });
+    
+    // Non-master accounts load only their assigned drivers
     if (!isMaster && subAccount !== 'master') {
       query = query.eq('sub_account', subAccount);
     }
+
     const { data, error } = await query;
     if (error) {
       showToast('Failed to load drivers', 'error');
@@ -91,7 +94,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
       nssf_number: nssfNumber,
       sha_number: shaNumber,
       status,
-      sub_account: isMaster ? subAccount : subAccount,
+      sub_account: isMaster ? 'mcl' : subAccount,
     };
 
     if (editingDriver) {
@@ -126,12 +129,11 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
     }
   };
 
-  // 1. Overall Metrics
+  // Summary aggregation metrics for Master Account
   const totalDrivers = drivers.length;
   const activeCount = drivers.filter(d => (d.status || '').toLowerCase() === 'active').length;
   const inactiveCount = drivers.filter(d => (d.status || '').toLowerCase() !== 'active').length;
 
-  // 2. Sub-Account Breakdown Summary
   const subAccountSummary = useMemo(() => {
     return SUB_ACCOUNTS.map(acc => {
       const accDrivers = drivers.filter(d => ((d as any).sub_account || '').toLowerCase() === acc.toLowerCase());
@@ -144,7 +146,6 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
     });
   }, [drivers]);
 
-  // 3. Dual Filter Logic
   const filteredDrivers = useMemo(() => {
     return drivers.filter(d => {
       const driverAny = d as any;
@@ -156,12 +157,13 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
         driverAny.sha_number?.toLowerCase().includes(searchQuery.toLowerCase());
 
       const matchesSubAccount =
+        !isMaster ||
         selectedSubAccountFilter === 'all' ||
         (driverAny.sub_account || '').toLowerCase() === selectedSubAccountFilter.toLowerCase();
 
       return matchesSearch && matchesSubAccount;
     });
-  }, [drivers, searchQuery, selectedSubAccountFilter]);
+  }, [drivers, searchQuery, selectedSubAccountFilter, isMaster]);
 
   if (loading) return <LoadingSpinner message="Loading drivers..." />;
 
@@ -201,57 +203,60 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
         </div>
       </div>
 
-      {/* Top Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="card p-4">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Drivers</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Inactive Drivers</p>
-          <p className="text-2xl font-bold text-slate-500 mt-1">{inactiveCount}</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Drivers</p>
-          <p className="text-2xl font-bold text-slate-800 mt-1">{totalDrivers}</p>
-        </div>
-      </div>
+      {/* Render Summary Cards & Table ONLY for Master Account */}
+      {isMaster && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="card p-4">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Drivers</p>
+              <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Inactive Drivers</p>
+              <p className="text-2xl font-bold text-slate-500 mt-1">{inactiveCount}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Drivers</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{totalDrivers}</p>
+            </div>
+          </div>
 
-      {/* Sub-Account Summary Table (Spare Parts Style) */}
-      <div className="card overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-          <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Sub-Account Summary</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Overview of registered drivers across sub-accounts</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                <th className="px-5 py-3">Sub-Account</th>
-                <th className="px-5 py-3 text-center">Active</th>
-                <th className="px-5 py-3 text-center">Inactive</th>
-                <th className="px-5 py-3 text-center">Total Drivers</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {subAccountSummary.map(item => (
-                <tr key={item.subAccount} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-5 py-3 font-semibold text-slate-800">{item.subAccount}</td>
-                  <td className="px-5 py-3 text-center font-medium text-emerald-600">{item.active}</td>
-                  <td className="px-5 py-3 text-center font-medium text-slate-500">{item.inactive}</td>
-                  <td className="px-5 py-3 text-center font-bold text-slate-900">{item.total}</td>
-                </tr>
-              ))}
-              <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
-                <td className="px-5 py-3">All Sub-accounts</td>
-                <td className="px-5 py-3 text-center text-emerald-600">{activeCount}</td>
-                <td className="px-5 py-3 text-center text-slate-500">{inactiveCount}</td>
-                <td className="px-5 py-3 text-center text-slate-900">{totalDrivers}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+          <div className="card overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+              <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Sub-Account Summary</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Overview of registered drivers across sub-accounts</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    <th className="px-5 py-3">Sub-Account</th>
+                    <th className="px-5 py-3 text-center">Active</th>
+                    <th className="px-5 py-3 text-center">Inactive</th>
+                    <th className="px-5 py-3 text-center">Total Drivers</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {subAccountSummary.map(item => (
+                    <tr key={item.subAccount} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="px-5 py-3 font-semibold text-slate-800">{item.subAccount}</td>
+                      <td className="px-5 py-3 text-center font-medium text-emerald-600">{item.active}</td>
+                      <td className="px-5 py-3 text-center font-medium text-slate-500">{item.inactive}</td>
+                      <td className="px-5 py-3 text-center font-bold text-slate-900">{item.total}</td>
+                    </tr>
+                  ))}
+                  <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
+                    <td className="px-5 py-3">All Sub-accounts</td>
+                    <td className="px-5 py-3 text-center text-emerald-600">{activeCount}</td>
+                    <td className="px-5 py-3 text-center text-slate-500">{inactiveCount}</td>
+                    <td className="px-5 py-3 text-center text-slate-900">{totalDrivers}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Dual Search & Filter Bar */}
       <div className="card p-4 flex flex-col md:flex-row items-center gap-3">
@@ -266,27 +271,29 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
-          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
-          <select
-            value={selectedSubAccountFilter}
-            onChange={e => setSelectedSubAccountFilter(e.target.value)}
-            className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
-          >
-            <option value="all">All Sub-Accounts</option>
-            {SUB_ACCOUNTS.map(acc => (
-              <option key={acc} value={acc}>
-                {acc.toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isMaster && (
+          <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+            <Filter className="h-4 w-4 text-slate-400 shrink-0" />
+            <select
+              value={selectedSubAccountFilter}
+              onChange={e => setSelectedSubAccountFilter(e.target.value)}
+              className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
+            >
+              <option value="all">All Sub-Accounts</option>
+              {SUB_ACCOUNTS.map(acc => (
+                <option key={acc} value={acc}>
+                  {acc.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Drivers Table */}
       {filteredDrivers.length === 0 ? (
         <div className="card py-12">
-          <EmptyState icon={<Users className="h-8 w-8" />} title="No drivers found" message="No matching records found for the selected filters." />
+          <EmptyState icon={<Users className="h-8 w-8" />} title="No drivers found" message="Get started by adding your first fleet driver." />
         </div>
       ) : (
         <div className="card overflow-hidden">
