@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Users, Plus, Search, Phone, CreditCard, Award, CheckCircle, XCircle, Trash2, Edit, Shield, Upload } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Users, Plus, Search, Phone, CreditCard, Award, CheckCircle, XCircle, Trash2, Edit, Shield, Upload, Filter } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { SubAccount } from '@/lib/portals';
@@ -9,6 +9,8 @@ import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { Driver } from '@/types';
 import { BulkImportModal } from '@/components/BulkImportModal';
 
+const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom'];
+
 export function DriversPage({ portalColor, isMaster }: { portalColor: string; isMaster?: boolean }) {
   const { profile } = useAuth();
   const { showToast } = useToast();
@@ -17,6 +19,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSubAccountFilter, setSelectedSubAccountFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
@@ -123,16 +126,42 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
     }
   };
 
-  const filteredDrivers = drivers.filter(d => {
-    const driverAny = d as any;
-    return (
-      d.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      d.license_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      driverAny.nssf_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      driverAny.sha_number?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  });
+  // 1. Overall Metrics
+  const totalDrivers = drivers.length;
+  const activeCount = drivers.filter(d => (d.status || '').toLowerCase() === 'active').length;
+  const inactiveCount = drivers.filter(d => (d.status || '').toLowerCase() !== 'active').length;
+
+  // 2. Sub-Account Breakdown Summary
+  const subAccountSummary = useMemo(() => {
+    return SUB_ACCOUNTS.map(acc => {
+      const accDrivers = drivers.filter(d => ((d as any).sub_account || '').toLowerCase() === acc.toLowerCase());
+      return {
+        subAccount: acc.toUpperCase(),
+        total: accDrivers.length,
+        active: accDrivers.filter(d => (d.status || '').toLowerCase() === 'active').length,
+        inactive: accDrivers.filter(d => (d.status || '').toLowerCase() !== 'active').length,
+      };
+    });
+  }, [drivers]);
+
+  // 3. Dual Filter Logic
+  const filteredDrivers = useMemo(() => {
+    return drivers.filter(d => {
+      const driverAny = d as any;
+      const matchesSearch =
+        d.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.phone?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.license_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        driverAny.nssf_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        driverAny.sha_number?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesSubAccount =
+        selectedSubAccountFilter === 'all' ||
+        (driverAny.sub_account || '').toLowerCase() === selectedSubAccountFilter.toLowerCase();
+
+      return matchesSearch && matchesSubAccount;
+    });
+  }, [drivers, searchQuery, selectedSubAccountFilter]);
 
   if (loading) return <LoadingSpinner message="Loading drivers..." />;
 
@@ -172,22 +201,92 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
         </div>
       </div>
 
-      {/* Search Filter Bar */}
-      <div className="card p-4 flex items-center gap-3">
-        <Search className="h-5 w-5 text-slate-400 shrink-0" />
-        <input
-          type="text"
-          placeholder="Search by name, phone, license, NSSF, or SHA..."
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="w-full bg-transparent text-sm outline-none text-slate-800 placeholder-slate-400"
-        />
+      {/* Top Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="card p-4">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Drivers</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Inactive Drivers</p>
+          <p className="text-2xl font-bold text-slate-500 mt-1">{inactiveCount}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Drivers</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{totalDrivers}</p>
+        </div>
       </div>
 
-      {/* Drivers Table / Grid */}
+      {/* Sub-Account Summary Table (Spare Parts Style) */}
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Sub-Account Summary</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Overview of registered drivers across sub-accounts</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="px-5 py-3">Sub-Account</th>
+                <th className="px-5 py-3 text-center">Active</th>
+                <th className="px-5 py-3 text-center">Inactive</th>
+                <th className="px-5 py-3 text-center">Total Drivers</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {subAccountSummary.map(item => (
+                <tr key={item.subAccount} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-5 py-3 font-semibold text-slate-800">{item.subAccount}</td>
+                  <td className="px-5 py-3 text-center font-medium text-emerald-600">{item.active}</td>
+                  <td className="px-5 py-3 text-center font-medium text-slate-500">{item.inactive}</td>
+                  <td className="px-5 py-3 text-center font-bold text-slate-900">{item.total}</td>
+                </tr>
+              ))}
+              <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
+                <td className="px-5 py-3">All Sub-accounts</td>
+                <td className="px-5 py-3 text-center text-emerald-600">{activeCount}</td>
+                <td className="px-5 py-3 text-center text-slate-500">{inactiveCount}</td>
+                <td className="px-5 py-3 text-center text-slate-900">{totalDrivers}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Dual Search & Filter Bar */}
+      <div className="card p-4 flex flex-col md:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full flex items-center gap-2">
+          <Search className="h-5 w-5 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            placeholder="Search by name, phone, license, NSSF, or SHA..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent text-sm outline-none text-slate-800 placeholder-slate-400"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
+          <select
+            value={selectedSubAccountFilter}
+            onChange={e => setSelectedSubAccountFilter(e.target.value)}
+            className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            <option value="all">All Sub-Accounts</option>
+            {SUB_ACCOUNTS.map(acc => (
+              <option key={acc} value={acc}>
+                {acc.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Drivers Table */}
       {filteredDrivers.length === 0 ? (
         <div className="card py-12">
-          <EmptyState icon={<Users className="h-8 w-8" />} title="No drivers found" message="Get started by adding your first fleet driver." />
+          <EmptyState icon={<Users className="h-8 w-8" />} title="No drivers found" message="No matching records found for the selected filters." />
         </div>
       ) : (
         <div className="card overflow-hidden">
@@ -199,6 +298,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
                   <th className="px-5 py-3">Phone Number</th>
                   <th className="px-5 py-3">ID / License</th>
                   <th className="px-5 py-3">NSSF & SHA</th>
+                  <th className="px-5 py-3">Sub-Account</th>
                   <th className="px-5 py-3">Status</th>
                   {!isMaster && <th className="px-5 py-3 text-right">Actions</th>}
                 </tr>
@@ -234,6 +334,7 @@ export function DriversPage({ portalColor, isMaster }: { portalColor: string; is
                           <Shield className="h-3 w-3 text-emerald-500" /> SHA: {driverAny.sha_number || '—'}
                         </div>
                       </td>
+                      <td className="px-5 py-3.5 text-slate-600 uppercase text-xs font-semibold">{driverAny.sub_account || '—'}</td>
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
                           d.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
