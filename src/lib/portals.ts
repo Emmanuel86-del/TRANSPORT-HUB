@@ -4,7 +4,7 @@ export type TabId =
   | 'live-monitor'
   | 'overview'
   | 'dashboard'
-  | 'vehicles' // <-- Added Trucks / Vehicles tab ID
+  | 'vehicles'
   | 'trips'
   | 'fuel'
   | 'tallies'
@@ -74,6 +74,10 @@ export interface TabConfig {
   icon: string;
 }
 
+export function portalLabel(slug: SubAccount): string {
+  return PORTALS[slug]?.fullName ?? slug.toUpperCase();
+}
+
 export function getTabsForPortal(slug: SubAccount): TabConfig[] {
   if (slug === 'master') {
     return [
@@ -84,7 +88,7 @@ export function getTabsForPortal(slug: SubAccount): TabConfig[] {
       { id: 'csl', label: 'CSL', icon: 'Building2' },
       { id: 'mushroom', label: 'Mushroom', icon: 'Building2' },
       { id: 'drivers', label: 'Drivers', icon: 'Users' },
-      { id: 'vehicles', label: 'Trucks / Vehicles', icon: 'Truck' }, // <-- Added to Master sidebar
+      { id: 'vehicles', label: 'Trucks / Vehicles', icon: 'Truck' },
       { id: 'users', label: 'Users', icon: 'UserCog' },
       { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
       { id: 'tyres', label: 'Tyres', icon: 'Disc' },
@@ -94,7 +98,6 @@ export function getTabsForPortal(slug: SubAccount): TabConfig[] {
     ];
   }
 
-  // Sub-account portals (MCL, Tarmal, CSL, Mushroom)
   return [
     { id: 'live-monitor', label: 'Live Monitor', icon: 'Activity' },
     { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -102,7 +105,7 @@ export function getTabsForPortal(slug: SubAccount): TabConfig[] {
     { id: 'fuel', label: 'Fuel', icon: 'Fuel' },
     { id: 'tallies', label: 'Tallies', icon: 'Calculator' },
     { id: 'drivers', label: 'Drivers', icon: 'Users' },
-    { id: 'vehicles', label: 'Trucks / Vehicles', icon: 'Truck' }, // <-- Added to Sub-account sidebar
+    { id: 'vehicles', label: 'Trucks / Vehicles', icon: 'Truck' },
     { id: 'spare-parts', label: 'Spare Parts', icon: 'Wrench' },
     { id: 'tyres', label: 'Tyres', icon: 'Disc' },
     { id: 'containers', label: 'Containers', icon: 'Package' },
