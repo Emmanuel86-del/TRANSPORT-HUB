@@ -167,8 +167,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const layersRef = useRef<any[]>([]);
 
   const isMaster = !forcedFilter || forcedFilter === 'all' || profile?.sub_account === 'master' || profile?.sub_account === null;
-  
-  // FIXED: If forcedFilter is 'all' or undefined, fallback to dropdown subFilter state so changing the dropdown actually works!
   const effectiveFilter = (!forcedFilter || forcedFilter === 'all') ? subFilter : forcedFilter;
   const currentConfig = PORTAL_LOCATIONS[effectiveFilter.toLowerCase()] || PORTAL_LOCATIONS.all;
 
@@ -969,8 +967,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
             </div>
           </div>
 
+          {/* RESTORED EXPLICIT MAP CONTAINER HEIGHT */}
           <div style={{ height: '420px', width: '100%', position: 'relative' }}>
-            <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
+            <div ref={mapRef} style={{ height: '420px', width: '100%', position: 'absolute', top: 0, left: 0 }} />
           </div>
 
           <div className="flex flex-wrap items-center gap-4 px-4 py-2 text-xs" style={{ borderTop: `1px solid ${MONITOR_COLORS.border}` }}>
