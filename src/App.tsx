@@ -117,7 +117,8 @@ function AppContent() {
     return <AuthPage portal={portal} />;
   }
 
-  const isMaster = pathSlug === 'master';
+  // FIXED: Ensured admin routes correctly trigger master mode
+  const isMaster = portal.slug === 'master' || window.location.pathname.startsWith('/admin');
 
   const renderTabContent = () => {
     if (isMaster) {
