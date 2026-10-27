@@ -74,7 +74,6 @@ export function OverviewPage({ color }: { color: string }) {
 
   useEffect(() => {
     async function loadMasterOverview() {
-      setLoading(true);
       try {
         const [tripsRes, vehiclesRes, driversRes, containersRes, fuelRes] = await Promise.all([
           supabase.from('trips').select('*'),
@@ -123,7 +122,24 @@ export function OverviewPage({ color }: { color: string }) {
       }
     }
 
+    // Initial load
     loadMasterOverview();
+
+    // Supabase Real-Time Subscriptions for instant updates
+    const channel = supabase
+      .channel('master-fleet-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => loadMasterOverview())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => loadMasterOverview())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drivers' }, () => loadMasterOverview())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'containers' }, () => loadMasterOverview())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fuel' }, () => loadMasterOverview())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fuel_logs' }, () => loadMasterOverview())
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const portals = [
