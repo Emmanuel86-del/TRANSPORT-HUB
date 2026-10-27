@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { UserCheck, AlertTriangle, Bell, Edit, Upload } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { ShieldCheck, AlertTriangle, Bell, Edit, Upload } from 'lucide-react';
+import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
@@ -8,16 +8,20 @@ import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { BulkImportModal } from '@/components/BulkImportModal';
 import { SubAccount } from '@/lib/portals';
 
-interface DriverComplianceRecord {
+interface ComplianceRecord {
   id: string;
-  driver_id: string;
-  driver?: { name: string; phone: string };
-  license_start: string;
-  license_expiry: string;
-  compliance_start: string;
-  compliance_expiry: string;
-  atic_insurance_start: string;
-  atic_insurance_expiry: string;
+  vehicle_id: string;
+  vehicle?: { plate_number: string; make?: string; model?: string };
+  insurance_start: string;
+  insurance_expiry: string;
+  comesa_start: string;
+  comesa_expiry: string;
+  ntsa_inspection_start: string;
+  ntsa_inspection_expiry: string;
+  truck_insurance_start: string;
+  truck_insurance_expiry: string;
+  trailer_insurance_start: string;
+  trailer_insurance_expiry: string;
 }
 
 function getExpiryStatus(expiryDateStr: string) {
@@ -49,45 +53,49 @@ function StatusBadge({ date }: { date: string }) {
   return <span className="badge-success">{date}</span>;
 }
 
-export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: string }) {
+export function FleetCompliance({ portalColor = '#0f172a' }: { portalColor?: string }) {
   const { profile } = useAuth();
   const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'mcl') as SubAccount;
 
   const [loading, setLoading] = useState(true);
-  const [records, setRecords] = useState<DriverComplianceRecord[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
+  const [records, setRecords] = useState<ComplianceRecord[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const emptyForm = {
-    driver_id: '',
-    license_start: '',
-    license_expiry: '',
-    compliance_start: '',
-    compliance_expiry: '',
-    atic_insurance_start: '',
-    atic_insurance_expiry: '',
+    vehicle_id: '',
+    insurance_start: '',
+    insurance_expiry: '',
+    comesa_start: '',
+    comesa_expiry: '',
+    ntsa_inspection_start: '',
+    ntsa_inspection_expiry: '',
+    truck_insurance_start: '',
+    truck_insurance_expiry: '',
+    trailer_insurance_start: '',
+    trailer_insurance_expiry: '',
   };
 
   const [form, setForm] = useState(emptyForm);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [compRes, drvRes] = await Promise.all([
-      supabase.from('driver_compliance').select('*, driver:drivers(name, phone)').order('created_at', { ascending: false }),
-      supabase.from('drivers').select('id, name, phone').order('name'),
+    const [compRes, vehRes] = await Promise.all([
+      supabase.from('vehicle_compliance').select('*, vehicle:vehicles(plate_number, make, model)').order('created_at', { ascending: false }),
+      supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
     ]);
     setRecords(compRes.data || []);
-    setDrivers(drvRes.data || []);
+    setVehicles(vehRes.data || []);
     setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   const activeAlarms = records.filter(r => {
-    return [r.license_expiry, r.compliance_expiry, r.atic_insurance_expiry]
+    return [r.insurance_expiry, r.comesa_expiry, r.ntsa_inspection_expiry, r.truck_insurance_expiry, r.trailer_insurance_expiry]
       .some(date => {
         const s = getExpiryStatus(date);
         return s === 'expired' || s === 'warning-2w' || s === 'warning-1m';
@@ -97,9 +105,9 @@ export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: st
   const saveRecord = async () => {
     setSaving(true);
     if (editId) {
-      await supabase.from('driver_compliance').update(form).eq('id', editId);
+      await supabase.from('vehicle_compliance').update(form).eq('id', editId);
     } else {
-      await supabase.from('driver_compliance').insert(form);
+      await supabase.from('vehicle_compliance').insert(form);
     }
     setSaving(false);
     setModalOpen(false);
@@ -110,12 +118,12 @@ export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: st
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <PageHeader 
-          title="Driver Compliance & Licensing" 
-          subtitle="Monitor Driver's Licenses, Compliance Documents, and ATIC Insurance Expirations" 
-          icon={<UserCheck className="h-6 w-6" />} 
+          title="Fleet Compliance & Insurance" 
+          subtitle="Monitor Insurance, COMESA, NTSA Inspections, Truck & Trailer Expirations" 
+          icon={<ShieldCheck className="h-6 w-6" />} 
           iconColor={portalColor}
           onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
-          addLabel="Add Driver Compliance"
+          addLabel="Add Compliance Record"
         />
         <div className="flex items-center gap-2">
           <button 
@@ -131,29 +139,31 @@ export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: st
         <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
           <Bell className="h-5 w-5 text-amber-600 mt-0.5 animate-bounce" />
           <div>
-            <h4 className="text-sm font-bold text-amber-900">Driver Expiry Notice</h4>
+            <h4 className="text-sm font-bold text-amber-900">Compliance Expiry Notice</h4>
             <p className="text-sm text-amber-700 mt-0.5">
-              You have <span className="font-semibold">{activeAlarms.length}</span> driver(s) with documents expiring within 1 month or already expired.
+              You have <span className="font-semibold">{activeAlarms.length}</span> vehicle(s) with compliance documents expiring within 1 month or already expired.
             </p>
           </div>
         </div>
       )}
 
       {loading ? (
-        <LoadingSpinner message="Loading driver compliance records..." />
+        <LoadingSpinner message="Loading compliance records..." />
       ) : records.length === 0 ? (
         <div className="card">
-          <EmptyState icon={<UserCheck className="h-8 w-8" />} title="No driver compliance logs found" message="Add compliance schedules manually or use bulk import." />
+          <EmptyState icon={<ShieldCheck className="h-8 w-8" />} title="No compliance logs found" message="Add compliance schedules manually or use bulk import." />
         </div>
       ) : (
         <div className="card table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Driver Name</th>
-                <th>Driver's License</th>
-                <th>General Compliance</th>
-                <th>ATIC Compliance Insurance</th>
+                <th>Vehicle</th>
+                <th>General Insurance</th>
+                <th>COMESA Insurance</th>
+                <th>NTSA Inspection</th>
+                <th>Truck Insurance</th>
+                <th>Trailer Insurance</th>
                 <th></th>
               </tr>
             </thead>
@@ -161,24 +171,32 @@ export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: st
               {records.map(r => (
                 <tr key={r.id}>
                   <td className="font-semibold text-slate-800">
-                    {r.driver?.name || 'Unknown'} <span className="block text-xs font-normal text-slate-500">{r.driver?.phone}</span>
+                    {r.vehicle?.plate_number || 'Unknown'} <span className="block text-xs font-normal text-slate-500">{r.vehicle?.make} {r.vehicle?.model}</span>
                   </td>
                   <td>
-                    <div className="text-xs">Start: {r.license_start || '—'}</div>
-                    <StatusBadge date={r.license_expiry} />
+                    <div className="text-xs">Start: {r.insurance_start || '—'}</div>
+                    <StatusBadge date={r.insurance_expiry} />
                   </td>
                   <td>
-                    <div className="text-xs">Start: {r.compliance_start || '—'}</div>
-                    <StatusBadge date={r.compliance_expiry} />
+                    <div className="text-xs">Start: {r.comesa_start || '—'}</div>
+                    <StatusBadge date={r.comesa_expiry} />
                   </td>
                   <td>
-                    <div className="text-xs">Start: {r.atic_insurance_start || '—'}</div>
-                    <StatusBadge date={r.atic_insurance_expiry} />
+                    <div className="text-xs">Start: {r.ntsa_inspection_start || '—'}</div>
+                    <StatusBadge date={r.ntsa_inspection_expiry} />
+                  </td>
+                  <td>
+                    <div className="text-xs">Start: {r.truck_insurance_start || '—'}</div>
+                    <StatusBadge date={r.truck_insurance_expiry} />
+                  </td>
+                  <td>
+                    <div className="text-xs">Start: {r.trailer_insurance_start || '—'}</div>
+                    <StatusBadge date={r.trailer_insurance_expiry} />
                   </td>
                   <td>
                     <button 
                       onClick={() => {
-                        const { id, created_at, driver, ...rest } = r as any;
+                        const { id, created_at, vehicle, ...rest } = r as any;
                         setForm(rest);
                         setEditId(id);
                         setModalOpen(true);
@@ -196,32 +214,40 @@ export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: st
       )}
 
       {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Driver Compliance' : 'Add Driver Compliance'} size="lg">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Compliance Record' : 'Add Fleet Compliance'} size="xl">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <label className="label">Select Driver *</label>
-            <select className="input" value={form.driver_id} onChange={e => setForm({ ...form, driver_id: e.target.value })}>
-              <option value="">Choose driver name</option>
-              {drivers.map(d => <option key={d.id} value={d.id}>{d.name} ({d.phone})</option>)}
+            <label className="label">Select Vehicle *</label>
+            <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
+              <option value="">Choose vehicle plate number</option>
+              {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} ({v.make} {v.model})</option>)}
             </select>
           </div>
 
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">Driver's License</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.license_start} onChange={e => setForm({ ...form, license_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.license_expiry} onChange={e => setForm({ ...form, license_expiry: e.target.value })} /></div>
+          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">General Insurance</div>
+          <div><label className="label">Start Date</label><input type="date" className="input" value={form.insurance_start} onChange={e => setForm({ ...form, insurance_start: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.insurance_expiry} onChange={e => setForm({ ...form, insurance_expiry: e.target.value })} /></div>
 
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">General Compliance</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.compliance_start} onChange={e => setForm({ ...form, compliance_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.compliance_expiry} onChange={e => setForm({ ...form, compliance_expiry: e.target.value })} /></div>
+          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">COMESA Insurance</div>
+          <div><label className="label">Start Date</label><input type="date" className="input" value={form.comesa_start} onChange={e => setForm({ ...form, comesa_start: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.comesa_expiry} onChange={e => setForm({ ...form, comesa_expiry: e.target.value })} /></div>
 
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">ATIC Compliance Insurance</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.atic_insurance_start} onChange={e => setForm({ ...form, atic_insurance_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.atic_insurance_expiry} onChange={e => setForm({ ...form, atic_insurance_expiry: e.target.value })} /></div>
+          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">NTSA Inspection</div>
+          <div><label className="label">Start Date</label><input type="date" className="input" value={form.ntsa_inspection_start} onChange={e => setForm({ ...form, ntsa_inspection_start: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.ntsa_inspection_expiry} onChange={e => setForm({ ...form, ntsa_inspection_expiry: e.target.value })} /></div>
+
+          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">Truck Insurance</div>
+          <div><label className="label">Start Date</label><input type="date" className="input" value={form.truck_insurance_start} onChange={e => setForm({ ...form, truck_insurance_start: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.truck_insurance_expiry} onChange={e => setForm({ ...form, truck_insurance_expiry: e.target.value })} /></div>
+
+          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">Trailer Insurance</div>
+          <div><label className="label">Start Date</label><input type="date" className="input" value={form.trailer_insurance_start} onChange={e => setForm({ ...form, trailer_insurance_start: e.target.value })} /></div>
+          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.trailer_insurance_expiry} onChange={e => setForm({ ...form, trailer_insurance_expiry: e.target.value })} /></div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel/Close</button>
-          <button onClick={saveRecord} disabled={saving || !form.driver_id} className="btn-primary">{saving ? 'Saving...' : 'Save Driver Compliance'}</button>
+          <button onClick={saveRecord} disabled={saving || !form.vehicle_id} className="btn-primary">{saving ? 'Saving...' : 'Save Compliance'}</button>
         </div>
       </Modal>
 
@@ -229,17 +255,21 @@ export function DriverCompliance({ portalColor = '#0f172a' }: { portalColor?: st
       <BulkImportModal
         open={isBulkOpen}
         onClose={() => setIsBulkOpen(false)}
-        tableName="driver_compliance"
+        tableName="vehicle_compliance"
         portalColor={portalColor}
         subAccount={subAccount}
         sampleColumns={[
-          'driver_id',
-          'license_start',
-          'license_expiry',
-          'compliance_start',
-          'compliance_expiry',
-          'atic_insurance_start',
-          'atic_insurance_expiry',
+          'vehicle_id',
+          'insurance_start',
+          'insurance_expiry',
+          'comesa_start',
+          'comesa_expiry',
+          'ntsa_inspection_start',
+          'ntsa_inspection_expiry',
+          'truck_insurance_start',
+          'truck_insurance_expiry',
+          'trailer_insurance_start',
+          'trailer_insurance_expiry',
         ]}
         onSuccess={loadData}
       />
