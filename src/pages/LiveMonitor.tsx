@@ -150,8 +150,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecordWithVehicle[]>([]);
   
-  // Explicit dropdown filter state
-  const [subFilter, setSubFilter] = useState<string>(forcedFilter ?? 'all');
+  const [subFilter, setSubFilter] = useState<string>('all');
   
   const [activeCard, setActiveCard] = useState<CardKey | null>(null);
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
@@ -168,8 +167,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const layersRef = useRef<any[]>([]);
 
   const isMaster = !forcedFilter || forcedFilter === 'all' || profile?.sub_account === 'master' || profile?.sub_account === null;
-  // If forcedFilter is passed, use it. Otherwise use the dropdown subFilter.
-  const effectiveFilter = forcedFilter ?? subFilter;
+  
+  // FIXED: If forcedFilter is 'all' or undefined, fallback to dropdown subFilter state so changing the dropdown actually works!
+  const effectiveFilter = (!forcedFilter || forcedFilter === 'all') ? subFilter : forcedFilter;
   const currentConfig = PORTAL_LOCATIONS[effectiveFilter.toLowerCase()] || PORTAL_LOCATIONS.all;
 
   const siteName = effectiveFilter === 'all' ? 'DESTINATION' : effectiveFilter.toUpperCase();
@@ -246,7 +246,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }
   }, [effectiveFilter, todayStr]);
 
-  // Load data when effectiveFilter changes
   useEffect(() => {
     loadData(true);
   }, [effectiveFilter, loadData]);
@@ -577,7 +576,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }
   };
 
-  // Instantly pan and zoom when effectiveFilter or mapToggle changes
   useEffect(() => {
     if (mapInstanceRef.current) {
       updateMapLayers();
