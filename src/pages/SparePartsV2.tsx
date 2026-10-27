@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Wrench, Plus, Edit, Search, History, Package, Battery, Upload, Download, X, FileText,
+  Wrench, Plus, Edit, Search, History, Package, Battery, Upload, Download, X, FileText, RefreshCw,
 } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -99,7 +99,148 @@ const labelCls = 'block text-xs font-semibold text-slate-600 mb-1';
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Entry point: master gets the summary only                           */
+/* ------------------------------------------------------------------ */
+
 export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclArea: MCLArea | null; portalColor: string; isMaster?: boolean }) {
+  return isMaster
+    ? <SparePartsMasterSummary portalColor={portalColor} />
+    : <SparePartsSubAccountView mclArea={mclArea} portalColor={portalColor} />;
+}
+
+const fmtKes = (n: number | null | undefined) =>
+  n == null ? '—' : `KES ${Number(n).toLocaleString('en-KE', { maximumFractionDigits: 0 })}`;
+
+function SparePartsMasterSummary({ portalColor }: { portalColor: string }) {
+  const { showToast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<any[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('spare_parts_summary_v').select('*');
+    if (error) {
+      console.error('Spare parts summary error:', error);
+      (showToast as any)(`Could not load spare parts summary: ${error.message}`, 'error');
+    }
+    setRows(data || []);
+    setLoading(false);
+  }, [showToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const zero = {
+    battery_new: 0, battery_rebound: 0, general_new: 0, general_rebound: 0,
+    in_store: 0, in_use: 0, under_repair: 0, retired: 0, total: 0, store_value: 0,
+  };
+
+  const bySub = useMemo(() => {
+    const map: Record<string, any> = {};
+    rows.forEach(r => { map[r.sub_account] = r; });
+    return SUB_ACCOUNTS.map(s => ({ ...s, ...zero, ...(map[s.value] || {}) }));
+  }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const totals = useMemo(() => {
+    const t: Record<string, number> = { ...zero };
+    bySub.forEach(r => { Object.keys(zero).forEach(k => { t[k] += Number(r[k] || 0); }); });
+    return t;
+  }, [bySub]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cards = [
+    { label: 'In store', value: totals.in_store, cls: 'text-green-700' },
+    { label: 'In use', value: totals.in_use, cls: 'text-blue-700' },
+    { label: 'Under repair', value: totals.under_repair, cls: 'text-amber-700' },
+    { label: 'Retired', value: totals.retired, cls: 'text-red-700' },
+  ];
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <PageHeader
+          title="Spare Parts"
+          subtitle="Summary across all sub-accounts (read-only)"
+          icon={<Wrench className="h-6 w-6" />}
+          iconColor={portalColor}
+        />
+        <button
+          onClick={load}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50"
+        >
+          <RefreshCw className="h-4 w-4 text-slate-500" /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <LoadingSpinner message="Loading spare parts summary..." />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {cards.map(c => (
+              <div key={c.label} className="card p-4">
+                <div className="text-xs font-semibold text-slate-500">{c.label}</div>
+                <div className={`mt-1 text-3xl font-bold ${c.cls}`}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="card table-wrapper overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Sub-Account</th>
+                  <th>Batteries (New / Rebound)</th>
+                  <th>General (New / Rebound)</th>
+                  <th>In Store</th>
+                  <th>In Use</th>
+                  <th>Under Repair</th>
+                  <th>Retired</th>
+                  <th>Total Parts</th>
+                  <th>Store Stock Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bySub.map(r => (
+                  <tr key={r.value}>
+                    <td className="font-bold text-slate-800">{r.label}</td>
+                    <td>{r.battery_new} / {r.battery_rebound}</td>
+                    <td>{r.general_new} / {r.general_rebound}</td>
+                    <td>{r.in_store}</td>
+                    <td>{r.in_use}</td>
+                    <td>{r.under_repair}</td>
+                    <td>{r.retired}</td>
+                    <td className="font-semibold">{r.total}</td>
+                    <td>{fmtKes(Number(r.store_value))}</td>
+                  </tr>
+                ))}
+                <tr className="bg-slate-50 font-bold">
+                  <td>All sub-accounts</td>
+                  <td>{totals.battery_new} / {totals.battery_rebound}</td>
+                  <td>{totals.general_new} / {totals.general_rebound}</td>
+                  <td>{totals.in_store}</td>
+                  <td>{totals.in_use}</td>
+                  <td>{totals.under_repair}</td>
+                  <td>{totals.retired}</td>
+                  <td>{totals.total}</td>
+                  <td>{fmtKes(totals.store_value)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-500">
+            Each sub-account manages its own spare parts. Open a sub-account portal to see individual parts and their history.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Sub-account: full view                                              */
+/* ------------------------------------------------------------------ */
+
+function SparePartsSubAccountView({ mclArea, portalColor }: { mclArea: MCLArea | null; portalColor: string }) {
   const { showToast } = useToast();
   const { profile } = useAuth();
   const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
@@ -122,7 +263,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [truckFilter, setTruckFilter] = useState('all');
-  const [masterSubFilter, setMasterSubFilter] = useState('all');
 
   // Panels / modals
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -154,13 +294,9 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
     let partsQuery = supabase.from('spare_parts_v2').select('*').order('created_at', { ascending: false });
     let vehicleQuery = supabase.from('vehicles').select('id, plate_number, sub_account').order('plate_number');
 
-    if (!isMaster) {
-      // Sub-account staff only ever see their own sub-account
-      partsQuery = (partsQuery as any).eq('sub_account', subAccount);
-      vehicleQuery = (vehicleQuery as any).eq('sub_account', subAccount);
-    } else if (masterSubFilter !== 'all') {
-      partsQuery = (partsQuery as any).eq('sub_account', masterSubFilter);
-    }
+    // Sub-account staff only ever see their own sub-account
+    partsQuery = (partsQuery as any).eq('sub_account', subAccount);
+    vehicleQuery = (vehicleQuery as any).eq('sub_account', subAccount);
 
     const [partsRes, vehiclesRes] = await Promise.all([partsQuery, vehicleQuery]);
 
@@ -171,7 +307,7 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
     setParts(partsRes.data || []);
     setVehicles(vehiclesRes.data || []);
     setLoading(false);
-  }, [isMaster, subAccount, masterSubFilter, toast]);
+  }, [subAccount, toast]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -273,7 +409,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
   const savePart = async () => {
     const serial = form.serial_number.trim();
     if (!serial) { toast('Serial number is required', 'error'); return; }
-    if (isMaster) return;
 
     setSaving(true);
     try {
@@ -357,7 +492,7 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
   };
 
   const saveAction = async () => {
-    if (!selectedPart || isMaster) return;
+    if (!selectedPart) return;
     const { action, action_date, truck_id, reason, notes } = actionForm;
 
     if (action === 'installed' && !truck_id) { toast('Choose the truck the part was installed on', 'error'); return; }
@@ -419,7 +554,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
   /* ----------------------------- Render --------------------------- */
 
   const primaryBtn = { background: portalColor, color: '#fff' };
-  const colCount = isMaster ? 9 : 8;
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -427,23 +561,12 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <PageHeader
           title="Spare Parts"
-          subtitle={isMaster ? 'All spare parts across every sub-account (read-only)' : 'Track individual parts with serial numbers and lifecycle status'}
+          subtitle="Track individual parts with serial numbers and lifecycle status"
           icon={<Wrench className="h-6 w-6" />}
           iconColor={portalColor}
         />
         <div className="flex flex-wrap items-center gap-2">
-          {isMaster && (
-            <select
-              value={masterSubFilter}
-              onChange={e => setMasterSubFilter(e.target.value)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 outline-none"
-            >
-              <option value="all">All sub-accounts</option>
-              {SUB_ACCOUNTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          )}
-          {!isMaster && (
-            <>
+          <>
               <button
                 onClick={openAdd}
                 className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg shadow-sm hover:opacity-90 transition-opacity"
@@ -463,8 +586,7 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
               >
                 <Download className="h-4 w-4 text-slate-500" /> Download Template
               </button>
-            </>
-          )}
+          </>
         </div>
       </div>
 
@@ -540,7 +662,7 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
           <EmptyState
             icon={<Package className="h-8 w-8" />}
             title="No spare parts found"
-            message={parts.length === 0 && !isMaster ? 'Get started by adding a part or importing a list.' : 'Nothing matches this tab and filter.'}
+            message={parts.length === 0 ? 'Get started by adding a part or importing a list.' : 'Nothing matches this tab and filter.'}
           />
         </div>
       ) : (
@@ -549,7 +671,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
             <thead>
               <tr>
                 <th>Serial No</th>
-                {isMaster && <th>Sub-Account</th>}
                 <th>Part Name</th>
                 <th>Status</th>
                 <th>Current Truck</th>
@@ -567,7 +688,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
                   className={`cursor-pointer hover:bg-slate-50 ${selectedId === p.id ? 'bg-slate-50' : ''}`}
                 >
                   <td className="font-bold text-slate-800">{p.serial_number}</td>
-                  {isMaster && <td className="uppercase text-slate-600">{p.sub_account}</td>}
                   <td>{p.part_name || '—'}</td>
                   <td><StatusBadge status={p.status} /></td>
                   <td>{vehicleMap[p.current_truck_id] || '—'}</td>
@@ -597,7 +717,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <StatusBadge status={selectedPart.status} />
                   <span className="text-xs text-slate-500">Truck: {vehicleMap[selectedPart.current_truck_id] || '—'}</span>
-                  {isMaster && <span className="text-xs uppercase text-slate-500">{selectedPart.sub_account}</span>}
                 </div>
               </div>
               <button onClick={() => setSelectedId(null)} className="text-slate-400 hover:text-slate-700" aria-label="Close history">
@@ -605,8 +724,7 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
               </button>
             </div>
 
-            {!isMaster && (
-              <div className="flex gap-2 border-b border-slate-200 p-4">
+            <div className="flex gap-2 border-b border-slate-200 p-4">
                 <button
                   onClick={openLogAction}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:opacity-90"
@@ -621,7 +739,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
                   <Edit className="h-4 w-4" /> Edit
                 </button>
               </div>
-            )}
 
             <div className="flex-1 overflow-y-auto p-4">
               {historyLoading ? (
@@ -804,8 +921,7 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
         </div>
       )}
 
-      {!isMaster && (
-        <BulkImportModal
+      <BulkImportModal
           open={isBulkOpen}
           onClose={() => setIsBulkOpen(false)}
           tableName="spare_parts_v2"
@@ -814,7 +930,6 @@ export function SparePartsV2({ mclArea, portalColor, isMaster = false }: { mclAr
           sampleColumns={SAMPLE_COLUMNS}
           onSuccess={loadData}
         />
-      )}
     </div>
   );
 }
