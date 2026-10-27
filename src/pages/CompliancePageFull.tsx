@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { ShieldCheck, Plus, Edit, Search, Truck, User, AlertCircle, CalendarClock, CheckCircle, XCircle, Upload } from 'lucide-react';
+import { ShieldCheck, Plus, Edit, Search, Truck, User, AlertCircle, CalendarClock, CheckCircle, XCircle, Upload, RefreshCw } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
@@ -91,7 +91,147 @@ function statusBadge(days: number | null): { bg: string; text: string; label: st
   return { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Active' };
 }
 
+const SUB_ACCOUNT_ROWS = [
+  { value: 'mcl', label: 'MCL' },
+  { value: 'tarmal', label: 'Tarmal' },
+  { value: 'csl', label: 'CSL' },
+  { value: 'mushroom', label: 'Mushroom' },
+];
+
+/* ------------------------------------------------------------------ */
+/* Entry point: master gets the summary only                           */
+/* ------------------------------------------------------------------ */
+
 export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: { mclArea: MCLArea | null; portalColor: string; isMaster?: boolean }) {
+  return isMaster
+    ? <ComplianceMasterSummary portalColor={portalColor} />
+    : <ComplianceSubAccountView mclArea={mclArea} portalColor={portalColor} />;
+}
+
+function ComplianceMasterSummary({ portalColor }: { portalColor: string }) {
+  const { showToast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [rows, setRows] = useState<any[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('compliance_summary_v').select('*');
+    if (error) {
+      console.error('Compliance summary error:', error);
+      showToast('Could not load compliance summary: ' + error.message, 'error');
+    }
+    setRows(data || []);
+    setLoading(false);
+  }, [showToast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const FIELDS = ['expired', 'due_week', 'due_month', 'active', 'no_expiry', 'total'] as const;
+
+  const tableRows = useMemo(() => {
+    const out: any[] = [];
+    SUB_ACCOUNT_ROWS.forEach(sa => {
+      (['vehicle', 'driver'] as const).forEach(type => {
+        const found = rows.find(r => r.sub_account === sa.value && r.item_type === type) || {};
+        out.push({
+          key: `${sa.value}:${type}`, label: sa.label, type,
+          expired: Number(found.expired || 0), due_week: Number(found.due_week || 0),
+          due_month: Number(found.due_month || 0), active: Number(found.active || 0),
+          no_expiry: Number(found.no_expiry || 0), total: Number(found.total || 0),
+        });
+      });
+    });
+    return out;
+  }, [rows]);
+
+  const totals = useMemo(() => {
+    const t: Record<string, number> = { expired: 0, due_week: 0, due_month: 0, active: 0, no_expiry: 0, total: 0 };
+    tableRows.forEach(r => FIELDS.forEach(f => { t[f] += r[f]; }));
+    return t;
+  }, [tableRows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <PageHeader
+          title="Compliance"
+          subtitle="Summary across all sub-accounts (read-only)"
+          icon={<ShieldCheck className="h-6 w-6" />}
+          iconColor={portalColor}
+        />
+        <button
+          onClick={load}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50"
+        >
+          <RefreshCw className="h-4 w-4 text-slate-500" /> Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <LoadingSpinner message="Loading compliance summary..." />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Expired" value={String(totals.expired)} icon={<XCircle className="h-6 w-6" />} color="rose" />
+            <StatCard label="Due This Week" value={String(totals.due_week)} icon={<AlertCircle className="h-6 w-6" />} color="rose" />
+            <StatCard label="Due This Month" value={String(totals.due_month)} icon={<CalendarClock className="h-6 w-6" />} color="amber" />
+            <StatCard label="All Active" value={String(totals.active)} icon={<CheckCircle className="h-6 w-6" />} color="emerald" />
+          </div>
+
+          <div className="card table-wrapper overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Sub-Account</th>
+                  <th>Compliance</th>
+                  <th>Expired</th>
+                  <th>Due This Week</th>
+                  <th>Due This Month</th>
+                  <th>Active</th>
+                  <th>No Expiry</th>
+                  <th>Total Items</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map(r => (
+                  <tr key={r.key}>
+                    <td className="font-bold text-slate-800">{r.type === 'vehicle' ? r.label : ''}</td>
+                    <td className="text-slate-600">{r.type === 'vehicle' ? 'Vehicles' : 'Drivers'}</td>
+                    <td className={r.expired > 0 ? 'text-red-600 font-semibold' : 'text-slate-500'}>{r.expired}</td>
+                    <td className={r.due_week > 0 ? 'text-orange-600 font-semibold' : 'text-slate-500'}>{r.due_week}</td>
+                    <td className={r.due_month > 0 ? 'text-amber-600 font-semibold' : 'text-slate-500'}>{r.due_month}</td>
+                    <td className="text-emerald-600">{r.active}</td>
+                    <td className="text-slate-500">{r.no_expiry}</td>
+                    <td className="font-semibold">{r.total}</td>
+                  </tr>
+                ))}
+                <tr className="bg-slate-50 font-bold">
+                  <td>All sub-accounts</td>
+                  <td></td>
+                  <td>{totals.expired}</td>
+                  <td>{totals.due_week}</td>
+                  <td>{totals.due_month}</td>
+                  <td>{totals.active}</td>
+                  <td>{totals.no_expiry}</td>
+                  <td>{totals.total}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-500">
+            Each sub-account manages its own compliance records. Open a sub-account portal to see individual items and documents.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Sub-account: full view                                              */
+/* ------------------------------------------------------------------ */
+
+function ComplianceSubAccountView({ mclArea, portalColor }: { mclArea: MCLArea | null; portalColor: string }) {
   const { showToast } = useToast();
   const { profile } = useAuth();
   const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
@@ -102,7 +242,6 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
   const [driverItems, setDriverItems] = useState<DriverComplianceItem[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
-  const [filterSubAccount, setFilterSubAccount] = useState('');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('');
 
@@ -136,8 +275,8 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
       .select('*, driver:drivers(name)')
       .order('expiry_date', { ascending: true, nullsFirst: false });
 
-    const sa = isMaster && filterSubAccount ? filterSubAccount : (!isMaster ? subAccount : '');
-    if (sa) { vq = vq.eq('sub_account', sa); dq = dq.eq('sub_account', sa); }
+    vq = vq.eq('sub_account', subAccount);
+    dq = dq.eq('sub_account', subAccount);
 
     const [vRes, dRes, vehRes, drvRes] = await Promise.all([
       vq, dq,
@@ -149,7 +288,7 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
     setVehicles(vehRes.data || []);
     setDrivers(drvRes.data || []);
     setLoading(false);
-  }, [isMaster, filterSubAccount, subAccount]);
+  }, [subAccount]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -276,29 +415,14 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
           onAdd={openAdd}
           addLabel={activeTab === 'vehicle' ? 'Add Vehicle Compliance' : 'Add Driver Compliance'}
         />
-        {!isMaster && (
-          <button
+        <button
             onClick={() => setIsBulkOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
           >
             <Upload className="h-4 w-4 text-slate-500" />
             Bulk Import
           </button>
-        )}
       </div>
-
-      {isMaster && (
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-slate-600">Sub-Account:</label>
-          <select className="input w-48 text-sm py-1.5" value={filterSubAccount} onChange={e => setFilterSubAccount(e.target.value)}>
-            <option value="">All Sub-Accounts</option>
-            <option value="mcl">MCL</option>
-            <option value="tarmal">TARMAL</option>
-            <option value="csl">CSL</option>
-            <option value="mushroom">MUSHROOM</option>
-          </select>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Expired" value={String(summary.expired)} icon={<XCircle className="h-6 w-6" />} color="rose" />
@@ -478,18 +602,6 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
                   <option value="renewed">Renewed</option>
                 </select>
               </div>
-              {isMaster && (
-                <div>
-                  <label className="label">Sub-Account</label>
-                  <select className="input" value={vForm.sub_account} onChange={e => setVForm({ ...vForm, sub_account: e.target.value })}>
-                    <option value="mcl">MCL</option>
-                    <option value="tarmal">TARMAL</option>
-                    <option value="csl">CSL</option>
-                    <option value="mushroom">MUSHROOM</option>
-                    <option value="master">Master</option>
-                  </select>
-                </div>
-              )}
               <div className="sm:col-span-2">
                 <label className="label">Notes</label>
                 <textarea className="input" rows={2} value={vForm.notes} onChange={e => setVForm({ ...vForm, notes: e.target.value })} />
@@ -537,18 +649,6 @@ export function CompliancePageFull({ mclArea, portalColor, isMaster = false }: {
                   <option value="renewed">Renewed</option>
                 </select>
               </div>
-              {isMaster && (
-                <div>
-                  <label className="label">Sub-Account</label>
-                  <select className="input" value={dForm.sub_account} onChange={e => setDForm({ ...dForm, sub_account: e.target.value })}>
-                    <option value="mcl">MCL</option>
-                    <option value="tarmal">TARMAL</option>
-                    <option value="csl">CSL</option>
-                    <option value="mushroom">MUSHROOM</option>
-                    <option value="master">Master</option>
-                  </select>
-                </div>
-              )}
               <div className="sm:col-span-2">
                 <label className="label">Notes</label>
                 <textarea className="input" rows={2} value={dForm.notes} onChange={e => setDForm({ ...dForm, notes: e.target.value })} />
