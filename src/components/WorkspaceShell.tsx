@@ -52,7 +52,6 @@ export function WorkspaceShell({
   const userRole = profile?.role ?? 'employee';
 
   const navigate = (tab: TabId) => {
-    // If clicking a sub-account portal from the Master sidebar, navigate directly to its path
     if (['mcl', 'tarmal', 'csl', 'mushroom'].includes(tab)) {
       window.location.href = pathForSlug(tab as SubAccount);
       return;
@@ -195,7 +194,6 @@ export function WorkspaceShell({
               <Menu className="h-5 w-5" />
             </button>
 
-            {/* Sub-Account Switcher dropdown */}
             {subAccountSwitcher && (
               <div className="relative">
                 <button
@@ -282,4 +280,3 @@ export function WorkspaceShell({
     </div>
   );
 }
-```[cite: 4]
