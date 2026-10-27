@@ -167,6 +167,8 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const layersRef = useRef<any[]>([]);
 
   const isMaster = !forcedFilter || forcedFilter === 'all' || profile?.sub_account === 'master' || profile?.sub_account === null;
+  
+  // FIXED: If forcedFilter is 'all' or undefined, fallback to dropdown subFilter state so changing the dropdown actually works!
   const effectiveFilter = (!forcedFilter || forcedFilter === 'all') ? subFilter : forcedFilter;
   const currentConfig = PORTAL_LOCATIONS[effectiveFilter.toLowerCase()] || PORTAL_LOCATIONS.all;
 
@@ -244,9 +246,13 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }
   }, [effectiveFilter, todayStr]);
 
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
-    loadData(true);
-  }, [effectiveFilter, loadData]);
+    // Skeleton only on the very first load. Re-showing it on every filter change
+    // unmounts the map <div> and leaves Leaflet attached to a dead element.
+    loadData(!hasLoadedRef.current);
+    hasLoadedRef.current = true;
+  }, [loadData]);
 
   useEffect(() => {
     const interval = setInterval(() => loadData(false), 5 * 60 * 1000);
@@ -432,42 +438,58 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  // Stable draw markers function
-  const drawMarkers = useCallback(() => {
-    if (!mapInstanceRef.current || !window.L) return;
+  useEffect(() => {
+    if (loading) return;
 
-    markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m.marker));
-    markersRef.current = [];
+    let cancelled = false;
 
-    const center = currentConfig.center;
+    loadLeaflet()
+      .then(() => {
+        if (cancelled || !mapRef.current) return;
 
-    unitStatuses.forEach(u => {
-      const isOverdue = u.badges.some(b => b.color === MONITOR_COLORS.offline && b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
-      const isWorkshop = u.badges.some(b => b.label === 'INSIDE WORKSHOP');
-      const isParked = u.badges.some(b => b.label.includes('PARKED'));
+        // If the map div was re-created, the old Leaflet instance points at a dead node
+        if (mapInstanceRef.current && mapInstanceRef.current.getContainer() !== mapRef.current) {
+          mapInstanceRef.current.remove();
+          mapInstanceRef.current = null;
+          layersRef.current = [];
+          markersRef.current = [];
+        }
 
-      let markerColor = MONITOR_COLORS.active;
-      if (isOverdue) markerColor = MONITOR_COLORS.offline;
-      else if (isWorkshop || isParked) markerColor = MONITOR_COLORS.workshop;
+        if (!mapInstanceRef.current) {
+          const map = window.L.map(mapRef.current, {
+            center: currentConfig.center,
+            zoom: currentConfig.zoom,
+            zoomControl: true,
+            scrollWheelZoom: false, // otherwise the map eats page scrolling
+          });
+          // Enable wheel-zoom only after the user clicks into the map
+          map.on('click', () => map.scrollWheelZoom.enable());
+          map.on('mouseout', () => map.scrollWheelZoom.disable());
+          mapInstanceRef.current = map;
+        }
 
-      const seed = u.vehicle.plate_number.charCodeAt(0) || 65;
-      const lat = center[0] + ((seed % 10) - 5) * 0.003;
-      const lng = center[1] + ((seed % 7) - 3) * 0.003;
+        updateMapLayers();
+        mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
 
-      const marker = window.L.circleMarker([lat, lng], {
-        radius: 9,
-        color: '#FFFFFF',
-        fillColor: markerColor,
-        fillOpacity: 0.9,
-        weight: 2,
-      });
-      marker.bindPopup(`<b>Unit: ${u.vehicle.plate_number}</b><br>Driver: ${u.currentDriver?.name || '—'}<br>Status: ${u.badges.map(b => b.label).join(', ') || 'Idle'}`);
-      marker.addTo(mapInstanceRef.current);
-      markersRef.current.push({ marker, plate: u.vehicle.plate_number.toLowerCase() });
-    });
-  }, [currentConfig, unitStatuses]);
+        [100, 300, 600, 1000].forEach(delay =>
+          setTimeout(() => mapInstanceRef.current?.invalidateSize(true), delay)
+        );
+      })
+      .catch(err => console.error(err));
 
-  const updateMapLayers = useCallback(() => {
+    return () => {
+      cancelled = true;
+    };
+  }, [loading]);
+
+  useEffect(() => {
+    return () => {
+      mapInstanceRef.current?.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  const updateMapLayers = () => {
     if (!mapInstanceRef.current || !window.L) return;
 
     layersRef.current.forEach(l => mapInstanceRef.current.removeLayer(l));
@@ -500,35 +522,41 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
 
     drawMarkers();
-  }, [mapToggle, currentConfig, drawMarkers]);
+  };
 
-  // Map Initialization Effect (Runs ONLY on load, portal switch, or map toggle)
-  useEffect(() => {
-    if (loading) return;
+  const drawMarkers = () => {
+    if (!mapInstanceRef.current || !window.L) return;
 
-    loadLeaflet()
-      .then(() => {
-        if (!mapRef.current) return;
+    markersRef.current.forEach(m => mapInstanceRef.current.removeLayer(m.marker));
+    markersRef.current = [];
 
-        if (!mapInstanceRef.current) {
-          mapInstanceRef.current = window.L.map(mapRef.current, {
-            center: currentConfig.center,
-            zoom: currentConfig.zoom,
-            zoomControl: true,
-          });
-        } else {
-          mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
-        }
+    const center = currentConfig.center;
 
-        updateMapLayers();
-        mapInstanceRef.current.invalidateSize(true);
+    unitStatuses.forEach(u => {
+      const isOverdue = u.badges.some(b => b.color === MONITOR_COLORS.offline && b.label.includes('NO SIGNAL') && b.label !== 'NO SIGNAL');
+      const isWorkshop = u.badges.some(b => b.label === 'INSIDE WORKSHOP');
+      const isParked = u.badges.some(b => b.label.includes('PARKED'));
 
-        [100, 300, 600, 1000].forEach(delay =>
-          setTimeout(() => mapInstanceRef.current?.invalidateSize(true), delay)
-        );
-      })
-      .catch(err => console.error('Error loading leaflet map:', err));
-  }, [loading, effectiveFilter, mapToggle, updateMapLayers, currentConfig]);
+      let markerColor = MONITOR_COLORS.active;
+      if (isOverdue) markerColor = MONITOR_COLORS.offline;
+      else if (isWorkshop || isParked) markerColor = MONITOR_COLORS.workshop;
+
+      const seed = u.vehicle.plate_number.charCodeAt(0) || 65;
+      const lat = center[0] + ((seed % 10) - 5) * 0.003;
+      const lng = center[1] + ((seed % 7) - 3) * 0.003;
+
+      const marker = window.L.circleMarker([lat, lng], {
+        radius: 9,
+        color: '#FFFFFF',
+        fillColor: markerColor,
+        fillOpacity: 0.9,
+        weight: 2,
+      });
+      marker.bindPopup(`<b>Unit: ${u.vehicle.plate_number}</b><br>Driver: ${u.currentDriver?.name || '—'}<br>Status: ${u.badges.map(b => b.label).join(', ') || 'Idle'}`);
+      marker.addTo(mapInstanceRef.current);
+      markersRef.current.push({ marker, plate: u.vehicle.plate_number.toLowerCase() });
+    });
+  };
 
   const resetMapView = () => {
     mapInstanceRef.current?.setView(currentConfig.center, currentConfig.zoom);
@@ -571,6 +599,27 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       setIsSearchingLocation(false);
     }
   };
+
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      updateMapLayers();
+      mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
+      mapInstanceRef.current.invalidateSize(true);
+    }
+  }, [effectiveFilter, mapToggle]);
+
+  // unitStatuses is a new array every second (it depends on `now`), so key the redraw
+  // on a string signature instead — markers only redraw when something really changes.
+  const markerSignature = useMemo(
+    () => unitStatuses.map(u => `${u.vehicle.id}:${u.badges.map(b => b.label).join('|')}`).join(';'),
+    [unitStatuses]
+  );
+
+  useEffect(() => {
+    if (mapInstanceRef.current && !loading) {
+      drawMarkers();
+    }
+  }, [markerSignature, loading]);
 
   const stale = isStale(lastUpdate, now);
   const timeStr = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -622,7 +671,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   };
 
   return (
-    <div className="space-y-4 animate-fade-in" style={{ background: MONITOR_COLORS.bg, minHeight: '100vh', padding: '20px', color: '#fff', fontFamily: 'monospace' }}>
+    <div className="space-y-4 animate-fade-in" style={{ background: MONITOR_COLORS.bg, minHeight: '100vh', padding: '20px 20px 80px', color: '#fff', fontFamily: 'monospace' }}>
       <style>{`
         .leaflet-container {
           width: 100% !important;
@@ -951,8 +1000,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
             </div>
           </div>
 
-          {/* FIXED DIRECT MAP CONTAINER ELEMENT */}
-          <div ref={mapRef} style={{ height: '420px', width: '100%' }} />
+          <div style={{ height: '420px', width: '100%', position: 'relative' }}>
+            <div ref={mapRef} style={{ height: '100%', width: '100%' }} />
+          </div>
 
           <div className="flex flex-wrap items-center gap-4 px-4 py-2 text-xs" style={{ borderTop: `1px solid ${MONITOR_COLORS.border}` }}>
             {[
