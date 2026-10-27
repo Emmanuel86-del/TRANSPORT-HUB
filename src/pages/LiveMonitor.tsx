@@ -150,6 +150,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecordWithVehicle[]>([]);
   
+  // Explicit dropdown filter state
   const [subFilter, setSubFilter] = useState<string>(forcedFilter ?? 'all');
   
   const [activeCard, setActiveCard] = useState<CardKey | null>(null);
@@ -166,8 +167,9 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const markersRef = useRef<{ marker: any; plate: string }[]>([]);
   const layersRef = useRef<any[]>([]);
 
-  const isMaster = forcedFilter === 'all' || profile?.sub_account === 'master' || profile?.sub_account === null;
-  const effectiveFilter = forcedFilter ?? (isMaster ? subFilter : profile?.sub_account ?? 'all');
+  const isMaster = !forcedFilter || forcedFilter === 'all' || profile?.sub_account === 'master' || profile?.sub_account === null;
+  // If forcedFilter is passed, use it. Otherwise use the dropdown subFilter.
+  const effectiveFilter = forcedFilter ?? subFilter;
   const currentConfig = PORTAL_LOCATIONS[effectiveFilter.toLowerCase()] || PORTAL_LOCATIONS.all;
 
   const siteName = effectiveFilter === 'all' ? 'DESTINATION' : effectiveFilter.toUpperCase();
@@ -244,8 +246,12 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }
   }, [effectiveFilter, todayStr]);
 
+  // Load data when effectiveFilter changes
   useEffect(() => {
     loadData(true);
+  }, [effectiveFilter, loadData]);
+
+  useEffect(() => {
     const interval = setInterval(() => loadData(false), 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [loadData]);
@@ -436,15 +442,18 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
     loadLeaflet()
       .then(() => {
-        if (cancelled || !mapRef.current || mapInstanceRef.current) return;
+        if (cancelled || !mapRef.current) return;
 
-        mapInstanceRef.current = window.L.map(mapRef.current, {
-          center: currentConfig.center,
-          zoom: currentConfig.zoom,
-          zoomControl: true,
-        });
+        if (!mapInstanceRef.current) {
+          mapInstanceRef.current = window.L.map(mapRef.current, {
+            center: currentConfig.center,
+            zoom: currentConfig.zoom,
+            zoomControl: true,
+          });
+        }
 
         updateMapLayers();
+        mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
 
         [100, 300, 600, 1000].forEach(delay =>
           setTimeout(() => mapInstanceRef.current?.invalidateSize(true), delay)
@@ -454,12 +463,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
 
     return () => {
       cancelled = true;
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-      layersRef.current = [];
-      markersRef.current = [];
     };
   }, [loading]);
 
@@ -574,7 +577,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }
   };
 
-  // Automatically pan, zoom, and update map layers when effectiveFilter changes
+  // Instantly pan and zoom when effectiveFilter or mapToggle changes
   useEffect(() => {
     if (mapInstanceRef.current) {
       updateMapLayers();
@@ -680,7 +683,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
               <select
                 value={subFilter}
                 onChange={e => setSubFilter(e.target.value)}
-                className="rounded-lg px-3 py-1.5 text-xs font-bold outline-none"
+                className="rounded-lg px-3 py-1.5 text-xs font-bold outline-none cursor-pointer"
                 style={{ background: MONITOR_COLORS.bg, color: MONITOR_COLORS.accent, border: `1px solid ${MONITOR_COLORS.border}` }}
               >
                 {SUB_ACCOUNT_OPTIONS.map(opt => (
