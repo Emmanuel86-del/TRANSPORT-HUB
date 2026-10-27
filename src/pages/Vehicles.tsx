@@ -1,242 +1,400 @@
-import { UniversalUploadModal } from '@/components/UniversalUpload';
-import { DocumentUpload } from '@/components/DocumentUpload';
-import { useEffect, useState, useCallback } from 'react';
-import { Truck, Search, Trash2, Edit, ExternalLink, FileSpreadsheet, Download } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import { PageHeader } from '@/components/PageHeader';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Truck as TruckIcon, Plus, Search, Edit, Trash2, CheckCircle, XCircle, Upload, Filter } from 'lucide-react';
+import { supabase, getSubAccountFilter } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import { SubAccount } from '@/lib/portals';
+import { useToast } from '@/components/Toast';
 import { Modal } from '@/components/Modal';
-import { LoadingSpinner, EmptyState, ConfirmDialog } from '@/components/Shared';
+import { LoadingSpinner, EmptyState } from '@/components/Shared';
+import { PageHeader } from '@/components/PageHeader';
+import { BulkImportModal } from '@/components/BulkImportModal';
 
 interface Vehicle {
   id: string;
   plate_number: string;
-  make?: string;
-  model?: string;
-  year?: number | null;
-  capacity_kg?: number | null;
-  fuel_type?: string;
+  make: string | null;
+  model: string | null;
+  year: number | null;
   status: string;
-  current_odometer?: number | null;
-  last_service_date?: string;
-  notes?: string;
-  trailer_number?: string;
-  documents?: string | null;
+  sub_account: string;
 }
 
-const emptyForm = {
-  plate_number: '',
-  make: '',
-  model: '',
-  year: null as number | null,
-  capacity_kg: null as number | null,
-  fuel_type: 'Diesel',
-  status: 'active',
-  current_odometer: null as number | null,
-  last_service_date: '',
-  notes: '',
-  trailer_number: '',
-  documents: null as string | null,
-};
+const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom'];
 
-function downloadTemplate() {
-  const headers = ['plate_number', 'make', 'model', 'year', 'capacity_kg', 'fuel_type', 'status', 'current_odometer', 'last_service_date', 'notes', 'trailer_number'];
-  const sampleRow = ['KCA 123A', 'Scania', 'R450', '2022', '30000', 'Diesel', 'active', '150000', '2026-01-10', 'Main fleet', 'TZ 4567'];
-  const csv = [headers, sampleRow].map(row => row.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `vehicles_bulk_template.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { portalColor?: string; isMaster?: boolean }) {
+  const { profile } = useAuth();
+  const { showToast } = useToast();
+  const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'mcl') as SubAccount;
 
-export function Vehicles() {
-  const [loading, setLoading] = useState(true);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [search, setSearch] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [bulkModalOpen, setBulkModalOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [docs, setDocs] = useState<string[]>([]);
-  const [bulkUploading, setBulkUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSubAccountFilter, setSelectedSubAccountFilter] = useState<string>('all');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
 
-  const load = useCallback(async () => {
+  // Form State for Adding / Updating
+  const [plateNumber, setPlateNumber] = useState('');
+  const [make, setMake] = useState('');
+  const [model, setModel] = useState('');
+  const [year, setYear] = useState<number | ''>('');
+  const [status, setStatus] = useState<string>('active');
+
+  const loadData = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('vehicles').select('*').order('plate_number', { ascending: true });
-    setVehicles(data || []);
+    let query = supabase.from('vehicles').select('*').order('plate_number', { ascending: true });
+    if (!isMaster && subAccount !== 'master') {
+      query = query.eq('sub_account', subAccount);
+    }
+    const { data, error } = await query;
+    if (error) {
+      showToast('Failed to load trucks/vehicles', 'error');
+    } else {
+      setVehicles(data || []);
+    }
     setLoading(false);
-  }, []);
+  }, [subAccount, isMaster, showToast]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
-  const filtered = vehicles.filter(v =>
-    !search || v.plate_number.toLowerCase().includes(search.toLowerCase()) || v.make?.toLowerCase().includes(search.toLowerCase()) || v.model?.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleOpenAddModal = () => {
+    setEditingVehicle(null);
+    setPlateNumber('');
+    setMake('');
+    setModel('');
+    setYear('');
+    setStatus('active');
+    setIsModalOpen(true);
+  };
 
-  const openAdd = () => { setForm(emptyForm); setEditId(null); setDocs([]); setModalOpen(true); };
-  const openEdit = (v: any) => { const { id, created_at, ...rest } = v; setForm(rest); setEditId(id); setDocs(rest.documents ? [rest.documents] : []); setModalOpen(true); };
+  const handleOpenEditModal = (vehicle: Vehicle) => {
+    setEditingVehicle(vehicle);
+    setPlateNumber(vehicle.plate_number || '');
+    setMake(vehicle.make || '');
+    setModel(vehicle.model || '');
+    setYear(vehicle.year || '');
+    setStatus(vehicle.status || 'active');
+    setIsModalOpen(true);
+  };
 
-  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBulkUploading(true);
-    const text = await file.text();
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length < 2) { alert('File is empty.'); setBulkUploading(false); return; }
+  const handleSaveVehicle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!plateNumber.trim()) {
+      showToast('Plate number is required', 'error');
+      return;
+    }
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    const rows = lines.slice(1).map(line => {
-      const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(v => v.trim().replace(/^"\vert{}"$/g, ''));
-      const obj: any = {};
-      headers.forEach((h, i) => { obj[h] = values[i] || null; });
+    const payload = {
+      plate_number: plateNumber.toUpperCase(),
+      make,
+      model,
+      year: year ? Number(year) : null,
+      status,
+      sub_account: subAccount === 'master' ? 'mcl' : subAccount,
+    };
+
+    if (editingVehicle) {
+      const { error } = await supabase.from('vehicles').update(payload).eq('id', editingVehicle.id);
+      if (error) {
+        showToast('Failed to update truck: ' + error.message, 'error');
+      } else {
+        showToast('Truck updated successfully', 'success');
+        setIsModalOpen(false);
+        loadData();
+      }
+    } else {
+      const { error } = await supabase.from('vehicles').insert([payload]);
+      if (error) {
+        showToast('Failed to add truck: ' + error.message, 'error');
+      } else {
+        showToast('Truck added successfully', 'success');
+        setIsModalOpen(false);
+        loadData();
+      }
+    }
+  };
+
+  const handleDeleteVehicle = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this truck?')) return;
+    const { error } = await supabase.from('vehicles').delete().eq('id', id);
+    if (error) {
+      showToast('Failed to delete truck', 'error');
+    } else {
+      showToast('Truck deleted', 'success');
+      loadData();
+    }
+  };
+
+  // 1. Overall Metrics
+  const totalVehicles = vehicles.length;
+  const activeCount = vehicles.filter(v => (v.status || '').toLowerCase() === 'active').length;
+  const inactiveCount = vehicles.filter(v => (v.status || '').toLowerCase() !== 'active').length;
+
+  // 2. Sub-Account Summary Table Aggregations
+  const subAccountSummary = useMemo(() => {
+    return SUB_ACCOUNTS.map(acc => {
+      const accVehicles = vehicles.filter(v => (v.sub_account || '').toLowerCase() === acc.toLowerCase());
       return {
-        plate_number: obj.plate_number || 'KAA 000A',
-        make: obj.make || '',
-        model: obj.model || '',
-        year: obj.year ? Number(obj.year) : null,
-        capacity_kg: obj.capacity_kg ? Number(obj.capacity_kg) : null,
-        fuel_type: obj.fuel_type || 'Diesel',
-        status: obj.status || 'active',
-        current_odometer: obj.current_odometer ? Number(obj.current_odometer) : null,
-        last_service_date: obj.last_service_date || null,
-        notes: obj.notes || '',
-        trailer_number: obj.trailer_number || '',
+        subAccount: acc.toUpperCase(),
+        total: accVehicles.length,
+        active: accVehicles.filter(v => (v.status || '').toLowerCase() === 'active').length,
+        inactive: accVehicles.filter(v => (v.status || '').toLowerCase() !== 'active').length,
       };
     });
+  }, [vehicles]);
 
-    const { error } = await supabase.from('vehicles').insert(rows);
-    setBulkUploading(false);
-    if (error) alert('Error: ' + error.message);
-    else { setBulkModalOpen(false); load(); }
-  };
+  // 3. Dual Filter Logic
+  const filteredVehicles = useMemo(() => {
+    return vehicles.filter(v => {
+      const matchesSearch =
+        v.plate_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        v.make?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        v.model?.toLowerCase().includes(searchQuery.toLowerCase());
 
-  const save = async () => {
-    setSaving(true);
-    const payload = { ...form, documents: docs[0] || null };
-    if (editId) await supabase.from('vehicles').update(payload).eq('id', editId);
-    else await supabase.from('vehicles').insert(payload);
-    setSaving(false); setModalOpen(false); load();
-  };
+      const matchesSubAccount =
+        selectedSubAccountFilter === 'all' ||
+        (v.sub_account || '').toLowerCase() === selectedSubAccountFilter.toLowerCase();
 
-  const confirmDelete = async () => {
-    if (!deleteId) return;
-    await supabase.from('vehicles').delete().eq('id', deleteId);
-    setDeleteId(null); load();
-  };
+      return matchesSearch && matchesSubAccount;
+    });
+  }, [vehicles, searchQuery, selectedSubAccountFilter]);
 
-  const update = <K extends keyof typeof emptyForm>(key: K, value: typeof emptyForm[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }));
-  };
+  if (loading) return <LoadingSpinner message="Loading trucks and vehicles..." />;
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <PageHeader title="Vehicle Management" subtitle="Vehicle inventory, insurance, and inspection tracking" icon={<Truck className="h-6 w-6" />} onAdd={openAdd} addLabel="Add Vehicle" templateName="vehicles" />
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <PageHeader
+          title="Trucks / Vehicles Management"
+          subtitle="Manage your fleet trucks, plate numbers, makes, models, and operational status"
+          icon={<TruckIcon className="h-6 w-6" />}
+          iconColor={portalColor}
+        />
 
-      {/* Universal Auto-Routing Data Importer Component */}
-      <UniversalUploadModal />
-
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input className="input pl-9" placeholder="Search plate, make, or model..." value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="flex items-center gap-2">
+          {!isMaster && (
+            <button
+              onClick={() => setIsBulkOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
+            >
+              <Upload className="h-4 w-4 text-slate-500" />
+              Bulk Import
+            </button>
+          )}
+          {!isMaster && (
+            <button
+              onClick={handleOpenAddModal}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white rounded-lg shadow-sm transition-opacity hover:opacity-90"
+              style={{ background: portalColor }}
+            >
+              <Plus className="h-4 w-4" />
+              Add Truck
+            </button>
+          )}
         </div>
-        <button onClick={() => setBulkModalOpen(true)} className="btn btn-secondary self-start sm:self-auto">
-          <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> Bulk Excel Upload
-        </button>
       </div>
 
-      {loading ? <LoadingSpinner message="Loading vehicles..." /> : filtered.length === 0 ? (
-        <div className="card"><EmptyState icon={<Truck className="h-8 w-8" />} title="No vehicles found" message="Add vehicles to manage your fleet register." /></div>
-      ) : (
-        <div className="card table-wrapper">
-          <table className="data-table">
+      {/* Metric Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="card p-4">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Fleet</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{activeCount}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Inactive / Offline</p>
+          <p className="text-2xl font-bold text-slate-500 mt-1">{inactiveCount}</p>
+        </div>
+        <div className="card p-4">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Fleet Count</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{totalVehicles}</p>
+        </div>
+      </div>
+
+      {/* Sub-Account Summary Table (Spare Parts Style) */}
+      <div className="card overflow-hidden">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+          <h2 className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Sub-Account Summary</h2>
+          <p className="text-xs text-slate-400 mt-0.5">Overview of active and assigned trucks across sub-accounts</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr><th>Plate No.</th><th>Make & Model</th><th>Year</th><th>Capacity (kg)</th><th>Fuel</th><th>Odometer</th><th>Status</th><th>Doc</th><th></th></tr>
+              <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                <th className="px-5 py-3">Sub-Account</th>
+                <th className="px-5 py-3 text-center">Active</th>
+                <th className="px-5 py-3 text-center">Inactive</th>
+                <th className="px-5 py-3 text-center">Total Trucks</th>
+              </tr>
             </thead>
-            <tbody>
-              {filtered.map((v: any) => (
-                <tr key={v.id}>
-                  <td className="font-semibold text-slate-800">{v.plate_number}</td>
-                  <td>{v.make} {v.model || ''}</td>
-                  <td>{v.year || '—'}</td>
-                  <td>{v.capacity_kg ? Number(v.capacity_kg).toLocaleString() : '—'}</td>
-                  <td>{v.fuel_type || '—'}</td>
-                  <td className="font-mono text-xs">{v.current_odometer ? Number(v.current_odometer).toLocaleString() + ' km' : '—'}</td>
-                  <td><span className={`badge-${v.status === 'active' ? 'success' : 'neutral'}`}>{v.status}</span></td>
-                  <td>
-                    {v.documents ? (
-                      <a href={v.documents} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-600 text-xs font-medium">
-                        <ExternalLink className="h-3.5 w-3.5" /> View
-                      </a>
-                    ) : <span className="text-slate-300">—</span>}
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => openEdit(v)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600"><Edit className="h-4 w-4" /></button>
-                      <button onClick={() => setDeleteId(v.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </td>
+            <tbody className="divide-y divide-slate-100">
+              {subAccountSummary.map(item => (
+                <tr key={item.subAccount} className="hover:bg-slate-50/80 transition-colors">
+                  <td className="px-5 py-3 font-semibold text-slate-800">{item.subAccount}</td>
+                  <td className="px-5 py-3 text-center font-medium text-emerald-600">{item.active}</td>
+                  <td className="px-5 py-3 text-center font-medium text-slate-500">{item.inactive}</td>
+                  <td className="px-5 py-3 text-center font-bold text-slate-900">{item.total}</td>
                 </tr>
               ))}
+              <tr className="bg-slate-50 font-bold text-slate-900 border-t-2 border-slate-200">
+                <td className="px-5 py-3">All Sub-accounts</td>
+                <td className="px-5 py-3 text-center text-emerald-600">{activeCount}</td>
+                <td className="px-5 py-3 text-center text-slate-500">{inactiveCount}</td>
+                <td className="px-5 py-3 text-center text-slate-900">{totalVehicles}</td>
+              </tr>
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Dual Search & Sub-Account Filter Bar */}
+      <div className="card p-4 flex flex-col md:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full flex items-center gap-2">
+          <Search className="h-5 w-5 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            placeholder="Search by plate number, make, or model..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent text-sm outline-none text-slate-800 placeholder-slate-400"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
+          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
+          <select
+            value={selectedSubAccountFilter}
+            onChange={e => setSelectedSubAccountFilter(e.target.value)}
+            className="w-full md:w-56 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            <option value="all font-medium">All Sub-Accounts</option>
+            {SUB_ACCOUNTS.map(acc => (
+              <option key={acc} value={acc}>
+                {acc.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Vehicles Table */}
+      {filteredVehicles.length === 0 ? (
+        <div className="card py-12">
+          <EmptyState icon={<TruckIcon className="h-8 w-8" />} title="No trucks/vehicles found" message="No matching records found for the selected filters." />
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                  <th className="px-5 py-3">Plate Number</th>
+                  <th className="px-5 py-3">Make & Model</th>
+                  <th className="px-5 py-3">Year</th>
+                  <th className="px-5 py-3">Sub-Account</th>
+                  <th className="px-5 py-3">Status</th>
+                  {!isMaster && <th className="px-5 py-3 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {filteredVehicles.map(v => (
+                  <tr key={v.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-5 py-3.5 font-bold text-slate-900 flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+                        <TruckIcon className="h-4 w-4" />
+                      </div>
+                      {v.plate_number}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-700 font-medium">
+                      {v.make || '—'} {v.model ? `(${v.model})` : ''}
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-600">{v.year || '—'}</td>
+                    <td className="px-5 py-3.5 text-slate-600 uppercase text-xs font-semibold">{v.sub_account || '—'}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                        v.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        {v.status === 'active' ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                        {v.status === 'active' ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    {!isMaster && (
+                      <td className="px-5 py-3.5 text-right space-x-2">
+                        <button 
+                          onClick={() => handleOpenEditModal(v)} 
+                          title="Update Truck"
+                          className="p-1.5 text-slate-500 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteVehicle(v.id)} 
+                          title="Delete Truck"
+                          className="p-1.5 text-slate-500 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
-      {/* Bulk Upload Modal */}
-      <Modal open={bulkModalOpen} onClose={() => setBulkModalOpen(false)} title="Bulk Upload Vehicles via Excel/CSV" size="md">
-        <div className="space-y-4">
-          <p className="text-sm text-slate-600">Download the required template, fill in your vehicle records, and upload the completed CSV file.</p>
-          <button onClick={downloadTemplate} className="btn btn-secondary w-full flex items-center justify-center gap-2">
-            <Download className="h-4 w-4 text-blue-600" /> Download Vehicles Template
-          </button>
-          <label className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500">
-            <FileSpreadsheet className="h-8 w-8 text-emerald-600 mb-2" />
-            <span className="text-sm font-medium text-slate-700">{bulkUploading ? 'Importing...' : 'Click to select filled CSV file'}</span>
-            <input type="file" accept=".csv" className="hidden" onChange={handleBulkUpload} disabled={bulkUploading} />
-          </label>
-        </div>
-        <div className="mt-5 flex justify-end"><button onClick={() => setBulkModalOpen(false)} className="btn-secondary">Close</button></div>
-      </Modal>
-
-      {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Vehicle' : 'Add Vehicle'} size="lg">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div><label className="label">Plate Number *</label><input className="input" value={form.plate_number} onChange={e => update('plate_number', e.target.value)} placeholder="e.g. KCA 123A" /></div>
-          <div><label className="label">Make</label><input className="input" value={form.make} onChange={e => update('make', e.target.value)} placeholder="e.g. Scania" /></div>
-          <div><label className="label">Model</label><input className="input" value={form.model} onChange={e => update('model', e.target.value)} placeholder="e.g. R450" /></div>
-          <div><label className="label">Year</label><input type="number" className="input" value={form.year ?? ''} onChange={e => update('year', e.target.value ? Number(e.target.value) : null)} /></div>
-          <div><label className="label">Capacity (kg)</label><input type="number" className="input" value={form.capacity_kg ?? ''} onChange={e => update('capacity_kg', e.target.value ? Number(e.target.value) : null)} /></div>
-          <div><label className="label">Fuel Type</label><input className="input" value={form.fuel_type} onChange={e => update('fuel_type', e.target.value)} /></div>
-          <div><label className="label">Current Odometer</label><input type="number" className="input" value={form.current_odometer ?? ''} onChange={e => update('current_odometer', e.target.value ? Number(e.target.value) : null)} /></div>
-          <div><label className="label">Last Service Date</label><input type="date" className="input" value={form.last_service_date} onChange={e => update('last_service_date', e.target.value)} /></div>
-          <div><label className="label">Trailer Number</label><input className="input" value={form.trailer_number} onChange={e => update('trailer_number', e.target.value)} /></div>
+      {/* Add / Update Modal */}
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingVehicle ? 'Update Truck Details' : 'Register New Truck'}>
+        <form onSubmit={handleSaveVehicle} className="space-y-4">
           <div>
-            <label className="label">Status</label>
-            <select className="input" value={form.status} onChange={e => update('status', e.target.value as any)}>
-              <option value="active">Active</option><option value="maintenance">Maintenance</option><option value="inactive">Inactive</option>
-            </select>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Plate Number *</label>
+            <input type="text" required className="input" placeholder="e.g. KAA 123A" value={plateNumber} onChange={e => setPlateNumber(e.target.value)} />
           </div>
-          <div className="sm:col-span-2">
-            <DocumentUpload
-              folder="vehicles"
-              recordId={editId || 'unsaved'}
-              existingDocs={docs}
-              onDocsChange={setDocs}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Make</label>
+              <input type="text" className="input" placeholder="e.g. Isuzu, Scania" value={make} onChange={e => setMake(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Model</label>
+              <input type="text" className="input" placeholder="e.g. Giga, P410" value={model} onChange={e => setModel(e.target.value)} />
+            </div>
           </div>
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
-          <button onClick={save} disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save'}</button>
-        </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Year</label>
+              <input type="number" className="input" placeholder="e.g. 2020" value={year} onChange={e => setYear(e.target.value ? Number(e.target.value) : '')} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Status</label>
+              <select className="input" value={status} onChange={e => setStatus(e.target.value)}>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-3">
+            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm" style={{ background: portalColor }}>
+              {editingVehicle ? 'Save Updates' : 'Save Truck'}
+            </button>
+          </div>
+        </form>
       </Modal>
 
-      <ConfirmDialog open={!!deleteId} title="Delete Vehicle" message="Are you sure?" onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        open={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        tableName="vehicles"
+        portalColor={portalColor}
+        subAccount={subAccount}
+        sampleColumns={['plate_number', 'make', 'model', 'year', 'status']}
+        onSuccess={loadData}
+      />
     </div>
   );
 }
