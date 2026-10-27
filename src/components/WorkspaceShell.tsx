@@ -52,11 +52,6 @@ export function WorkspaceShell({
   const userRole = profile?.role ?? 'employee';
 
   const navigate = (tab: TabId) => {
-    if (['mcl', 'tarmal', 'csl', 'mushroom'].includes(tab)) {
-      window.location.href = pathForSlug(tab as SubAccount);
-      return;
-    }
-
     if (tab === activeTab) return;
     onTabChange(tab);
     setSidebarOpen(false);
@@ -194,6 +189,7 @@ export function WorkspaceShell({
               <Menu className="h-5 w-5" />
             </button>
 
+            {/* Sub-Account Switcher dropdown restored */}
             {subAccountSwitcher && (
               <div className="relative">
                 <button
@@ -280,3 +276,4 @@ export function WorkspaceShell({
     </div>
   );
 }
+```[cite: 4]
