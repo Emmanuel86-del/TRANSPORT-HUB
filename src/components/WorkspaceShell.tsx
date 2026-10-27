@@ -57,7 +57,7 @@ export function WorkspaceShell({
     setSidebarOpen(false);
 
     const basePath = pathForSlug(portal.slug);
-    const newPath = (tab === 'live-monitor' || tab === 'dashboard' || tab === 'overview')
+    const newPath = (tab === 'live-monitor' || tab === 'dashboard' || tab === 'overview' || ['mcl', 'tarmal', 'csl', 'mushroom'].includes(tab))
       ? basePath
       : `${basePath}/${tab}`;
     
@@ -86,7 +86,7 @@ export function WorkspaceShell({
   }, [onTabChange]);
 
   const getTableForActiveTab = (): { tableName: string; templateKey: string } => {
-    if (activeTab === 'vehicles') return { tableName: 'vehicles', templateKey: 'vehicles' }; // <-- Added Vehicles mapping
+    if (activeTab === 'vehicles') return { tableName: 'vehicles', templateKey: 'vehicles' };
     if (activeTab === 'spare-parts') return { tableName: 'spare_parts_v2', templateKey: 'spare_parts' };
     if (activeTab === 'tyres') return { tableName: 'tyres', templateKey: 'tyres' };
     return { tableName: 'sub_account_trips', templateKey: 'trips' };
@@ -189,52 +189,49 @@ export function WorkspaceShell({
               <Menu className="h-5 w-5" />
             </button>
 
-            {/* Clean Sub-Account Switcher dropdown */}
-            {subAccountSwitcher && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowSwitcher(!showSwitcher)}
-                  className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100 transition-colors shadow-sm"
-                >
-                  <Building2 className="h-4 w-4 text-red-700" />
-                  <span>{portal.fullName}</span>
-                  <ChevronDown className="h-4 w-4 text-slate-500" />
-                </button>
-                {showSwitcher && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setShowSwitcher(false)} />
-                    <div className="absolute left-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-xl z-20 py-1 animate-fade-in">
-                      <button
-                        onClick={() => { setShowSwitcher(false); window.location.href = '/admin'; }}
-                        className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 border-b border-slate-100"
-                      >
-                        <span className="h-2.5 w-2.5 rounded-full bg-red-700" />
-                        Master Fleet Summary
-                      </button>
-                      {(['mcl', 'tarmal', 'csl', 'mushroom'] as SubAccount[]).map(slug => {
-                        const p = PORTALS[slug];
-                        return (
-                          <button
-                            key={slug}
-                            onClick={() => {
-                              setShowSwitcher(false);
-                              window.location.href = pathForSlug(slug);
-                            }}
-                            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
-                            {p.fullName}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+            {/* Sub-Account Switcher dropdown restored */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSwitcher(!showSwitcher)}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-100 transition-colors shadow-sm"
+              >
+                <Building2 className="h-4 w-4" style={{ color: portal.color }} />
+                <span>{portal.fullName}</span>
+                <ChevronDown className="h-4 w-4 text-slate-500" />
+              </button>
+              {showSwitcher && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowSwitcher(false)} />
+                  <div className="absolute left-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white shadow-xl z-20 py-1 animate-fade-in">
+                    <button
+                      onClick={() => { setShowSwitcher(false); window.location.href = '/admin'; }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 border-b border-slate-100"
+                    >
+                      <span className="h-2.5 w-2.5 rounded-full bg-red-700" />
+                      Master Fleet Summary
+                    </button>
+                    {(['mcl', 'tarmal', 'csl', 'mushroom'] as SubAccount[]).map(slug => {
+                      const p = PORTALS[slug];
+                      return (
+                        <button
+                          key={slug}
+                          onClick={() => {
+                            setShowSwitcher(false);
+                            window.location.href = pathForSlug(slug);
+                          }}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />
+                          {p.fullName}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Hide Upload button if in Master view */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
