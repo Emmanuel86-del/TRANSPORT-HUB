@@ -150,7 +150,6 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [workRecords, setWorkRecords] = useState<WorkRecordWithVehicle[]>([]);
   
-  // Initialize state immediately from forcedFilter to avoid async flicker
   const [subFilter, setSubFilter] = useState<string>(forcedFilter ?? 'all');
   
   const [activeCard, setActiveCard] = useState<CardKey | null>(null);
@@ -462,7 +461,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
       layersRef.current = [];
       markersRef.current = [];
     };
-  }, [loading, effectiveFilter]);
+  }, [loading]);
 
   const updateMapLayers = () => {
     if (!mapInstanceRef.current || !window.L) return;
@@ -575,9 +574,11 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }
   };
 
+  // FIXED: Automatically pan and zoom the map when effectiveFilter changes!
   useEffect(() => {
     if (mapInstanceRef.current) {
       updateMapLayers();
+      mapInstanceRef.current.setView(currentConfig.center, currentConfig.zoom);
       mapInstanceRef.current.invalidateSize(true);
     }
   }, [mapToggle, effectiveFilter]);
