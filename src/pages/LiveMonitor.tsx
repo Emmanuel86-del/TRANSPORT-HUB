@@ -432,41 +432,7 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     }));
   }, [trips, now]);
 
-  const updateMapLayers = useCallback(() => {
-    if (!mapInstanceRef.current || !window.L) return;
-
-    layersRef.current.forEach(l => mapInstanceRef.current.removeLayer(l));
-    layersRef.current = [];
-
-    const tileUrl = mapToggle === 'satellite'
-      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-    const attribution = mapToggle === 'satellite' ? 'Esri' : 'OpenStreetMap';
-
-    const tileLayer = window.L.tileLayer(tileUrl, {
-      attribution,
-      maxZoom: 19,
-      subdomains: 'abc',
-    });
-    tileLayer.addTo(mapInstanceRef.current);
-    layersRef.current.push(tileLayer);
-
-    currentConfig.geofences.forEach(gf => {
-      const polygon = window.L.polygon(gf.coords, {
-        color: gf.color,
-        weight: 2,
-        dashArray: '6 4',
-        fillOpacity: 0.15,
-      });
-      polygon.bindTooltip(gf.name, { permanent: true, direction: 'center' });
-      polygon.addTo(mapInstanceRef.current);
-      layersRef.current.push(polygon);
-    });
-
-    drawMarkers();
-  }, [mapToggle, currentConfig, unitStatuses]);
-
+  // Stable draw markers function
   const drawMarkers = useCallback(() => {
     if (!mapInstanceRef.current || !window.L) return;
 
@@ -501,7 +467,42 @@ export function LiveMonitor({ color, subAccountFilter: forcedFilter }: { color: 
     });
   }, [currentConfig, unitStatuses]);
 
-  // Robust Map Initialization & Update Effect
+  const updateMapLayers = useCallback(() => {
+    if (!mapInstanceRef.current || !window.L) return;
+
+    layersRef.current.forEach(l => mapInstanceRef.current.removeLayer(l));
+    layersRef.current = [];
+
+    const tileUrl = mapToggle === 'satellite'
+      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+      : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+    const attribution = mapToggle === 'satellite' ? 'Esri' : 'OpenStreetMap';
+
+    const tileLayer = window.L.tileLayer(tileUrl, {
+      attribution,
+      maxZoom: 19,
+      subdomains: 'abc',
+    });
+    tileLayer.addTo(mapInstanceRef.current);
+    layersRef.current.push(tileLayer);
+
+    currentConfig.geofences.forEach(gf => {
+      const polygon = window.L.polygon(gf.coords, {
+        color: gf.color,
+        weight: 2,
+        dashArray: '6 4',
+        fillOpacity: 0.15,
+      });
+      polygon.bindTooltip(gf.name, { permanent: true, direction: 'center' });
+      polygon.addTo(mapInstanceRef.current);
+      layersRef.current.push(polygon);
+    });
+
+    drawMarkers();
+  }, [mapToggle, currentConfig, drawMarkers]);
+
+  // Map Initialization Effect (Runs ONLY on load, portal switch, or map toggle)
   useEffect(() => {
     if (loading) return;
 
