@@ -117,7 +117,14 @@ function AppContent() {
     return <AuthPage portal={portal} />;
   }
 
-  // FIXED: Ensured admin routes correctly trigger master mode
+  // SECURITY CHECK: If a non-master user tries to access /admin, redirect them to their assigned sub-account portal
+  const isVisitingMaster = window.location.pathname.startsWith('/admin');
+  const userSubAccount = profile?.sub_account;
+  if (isVisitingMaster && userSubAccount && userSubAccount !== 'master' && userSubAccount !== 'admin') {
+    window.location.replace(`/${userSubAccount}`);
+    return <LoadingSpinner message="Redirecting to your authorized portal..." />;
+  }
+
   const isMaster = portal.slug === 'master' || window.location.pathname.startsWith('/admin');
 
   const renderTabContent = () => {
