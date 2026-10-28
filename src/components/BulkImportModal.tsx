@@ -64,7 +64,29 @@ export function BulkImportModal({
     reader.readAsText(file);
   };
 
-  // 3. Parse and Insert CSV Data into Supabase
+  // Helper to check if a column is typically numeric
+  const isNumericHeader = (header: string): boolean => {
+    const h = header.toLowerCase();
+    return (
+      h.includes('ton') ||
+      h.includes('trip') ||
+      h.includes('fuel') ||
+      h.includes('bal') ||
+      h.includes('litr') ||
+      h.includes('cost') ||
+      h.includes('rate') ||
+      h.includes('qty') ||
+      h.includes('quantity') ||
+      h.includes('amount') ||
+      h.includes('usage') ||
+      h.includes('loss') ||
+      h.includes('gain') ||
+      h.includes('empty') ||
+      h.startsWith('__empty')
+    );
+  };
+
+  // 3. Parse and Insert Data into Supabase with Data Sanitization
   const handleImport = async () => {
     if (!rawText.trim()) {
       showToast('Please upload a CSV file or paste data', 'error');
@@ -80,25 +102,40 @@ export function BulkImportModal({
         return;
       }
 
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+      // Support comma or tab separation
+      const delimiter = lines[0].includes('\t') ? '\t' : ',';
+      const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
       let successCount = 0;
       let errorCount = 0;
 
       for (let i = 1; i < lines.length; i++) {
-        // Handle standard comma separation (accounting for potential quotes if needed)
-        const values = lines[i].split(',').map(v => v.trim().replace(/^["']|["']$/g, ''));
+        const values = lines[i].split(delimiter).map(v => v.trim().replace(/^["']|["']$/g, ''));
         const record: Record<string, any> = {
           sub_account: subAccount,
         };
 
         headers.forEach((header, index) => {
-          const val = values[index];
-          if (val !== undefined && val !== '') {
-            record[header] = val;
+          if (!header) return;
+          const rawVal = values[index];
+
+          if (isNumericHeader(header)) {
+            // Convert numbers safely, default to 0 for invalid/empty entries or letter artifacts
+            if (rawVal === undefined || rawVal === '' || isNaN(Number(rawVal))) {
+              record[header] = 0;
+            } else {
+              record[header] = Number(rawVal);
+            }
+          } else {
+            // Handle text or category codes
+            if (rawVal !== undefined && rawVal !== '') {
+              record[header] = rawVal;
+            } else {
+              record[header] = null;
+            }
           }
         });
 
-        // Skip rows if empty
+        // Skip row if no actual values were assigned beyond sub_account
         if (Object.keys(record).length <= 1) continue;
 
         const { error } = await supabase.from(tableName).insert([record]);
@@ -115,10 +152,10 @@ export function BulkImportModal({
         onSuccess();
         onClose();
       } else {
-        showToast('Import failed. Check your file columns and formatting.', 'error');
+        showToast('Import failed. Check your file formatting and columns.', 'error');
       }
     } catch (err: any) {
-      showToast('Error processing CSV: ' + err.message, 'error');
+      showToast('Error processing file: ' + err.message, 'error');
     } finally {
       setImporting(false);
     }
@@ -134,7 +171,7 @@ export function BulkImportModal({
             <h3 className="text-lg font-bold text-slate-800 uppercase tracking-wide">
               Bulk Import — {tableName.replace(/_/g, ' ')}
             </h3>
-            <p className="text-xs text-slate-500">Download the template, fill it out, and upload your CSV file.</p>
+            <p className="text-xs text-slate-500">Download the template, fill it out, and upload your CSV or spreadsheet file.</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
             <X className="h-5 w-5" />
@@ -190,7 +227,7 @@ export function BulkImportModal({
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept=".csv"
+                  accept=".csv,.txt"
                   className="hidden"
                 />
                 {fileName ? (
