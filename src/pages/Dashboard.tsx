@@ -61,11 +61,11 @@ export function Dashboard({
       setLoading(true);
 
       if (isMasterView) {
-        // Load Master Summaries across all sub-accounts
+        // Load Master Summaries across all sub-accounts with full real-time metrics
         const results: Record<string, SubAccountSummary> = {};
         for (const sa of SUB_ACCOUNTS) {
           const [tripsRes, vehiclesRes, driversRes, containersRes] = await Promise.all([
-            supabase.from('sub_account_trips').select('tons, total_fuel_added, status').eq('sub_account', sa),
+            supabase.from('sub_account_trips').select('tons, total_fuel_added, status, distance_km, distance, freight_amount, fuel_cost').eq('sub_account', sa),
             supabase.from('vehicles').select('id', { count: 'exact' }).eq('sub_account', sa),
             supabase.from('drivers').select('id', { count: 'exact' }).eq('sub_account', sa),
             supabase.from('sub_account_containers').select('id', { count: 'exact' }).eq('sub_account', sa),
@@ -75,9 +75,9 @@ export function Dashboard({
 
           results[sa] = {
             subAccount: sa.toUpperCase(),
-            totalRevenue: tripList.reduce((sum, t) => sum + (Number(t.tons) || 0) * 420, 0), // estimated rate
-            totalDistance: tripList.length * 50,
-            fuelCost: tripList.reduce((sum, t) => sum + (Number(t.total_fuel_added) || 0) * 214.5, 0),
+            totalRevenue: tripList.reduce((sum, t) => sum + (Number(t.freight_amount) || (Number(t.tons) || 0) * 420 || 0), 0),
+            totalDistance: tripList.reduce((sum, t) => sum + (Number(t.distance_km) || Number(t.distance) || 0), 0),
+            fuelCost: tripList.reduce((sum, t) => sum + (Number(t.fuel_cost) || (Number(t.total_fuel_added) || 0) * 214.5 || 0), 0),
             activeVehicles: vehiclesRes.count || 0,
             activeDrivers: driversRes.count || 0,
             totalTrips: tripList.length,
@@ -86,7 +86,7 @@ export function Dashboard({
         }
         setSummaries(results);
       } else {
-        // Load Specific Sub-Account Operational Data (supports fallback to master or current subaccount)
+        // Load Specific Sub-Account Operational Data
         let tripsQuery = supabase.from('sub_account_trips').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`).order('trip_date', { ascending: false }).limit(50);
         let vehiclesQuery = supabase.from('vehicles').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`);
         let driversQuery = supabase.from('drivers').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`);
@@ -194,10 +194,10 @@ export function Dashboard({
   const activeVehicles = vehicles;
   const activeDrivers = drivers;
   const lowStockParts = spareParts.filter(p => (p.quantity_in_stock || 0) <= (p.minimum_stock || 5));
-  const totalRevenue = completedTrips.reduce((sum, t) => sum + ((Number(t.tons) || 0) * 420 || t.freight_amount || 0), 0);
-  const totalFuelCost = trips.reduce((sum, t) => sum + ((Number(t.total_fuel_added) || 0) * 214.5 || t.fuel_cost || 0), 0);
+  const totalRevenue = completedTrips.reduce((sum, t) => sum + (Number(t.freight_amount) || (Number(t.tons) || 0) * 420 || 0), 0);
+  const totalFuelCost = trips.reduce((sum, t) => sum + (Number(t.fuel_cost) || (Number(t.total_fuel_added) || 0) * 214.5 || 0), 0);
   const totalWorkCost = workRecords.reduce((sum, w) => sum + (w.labor_cost || 0) + (w.parts_cost || 0), 0);
-  const totalDistance = trips.reduce((sum, t) => sum + (t.distance_km || 50), 0);
+  const totalDistance = trips.reduce((sum, t) => sum + (Number(t.distance_km) || Number(t.distance) || 0), 0);
 
   return (
     <div className="space-y-6 animate-fade-in">
