@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Route as RouteIcon, Plus, Edit, Download, Upload } from 'lucide-react';
+import { Route as RouteIcon, Edit, Upload } from 'lucide-react';
 import { supabase, getSubAccountFilter } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
@@ -8,6 +8,63 @@ import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { useToast } from '@/components/Toast';
 import { SubAccount, MCLArea } from '@/lib/portals';
 import { BulkImportModal } from '@/components/BulkImportModal';
+
+// Material source abbreviations used in the MCL sheets
+const SOURCES: Record<string, string> = {
+  M: 'MCL Mines',
+  G: 'Gas',
+  N: 'Ngamani',
+  S: 'Minor St/Pile',
+  T: 'TEZZO (Ngamani)',
+};
+
+const TRIP_NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+
+// Read "Trip1=T; Trip2=N" from notes -> { 1: 'T', 2: 'N' }
+function parseSources(notes?: string | null): Record<number, string> {
+  const out: Record<number, string> = {};
+  if (!notes) return out;
+  const re = /Trip(\d+)=([A-Za-z])/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(notes)) !== null) out[Number(m[1])] = m[2].toUpperCase();
+  return out;
+}
+
+// Read "Truck: KDA 767C;" from notes (used for imported rows with no vehicle_id yet)
+function truckFromNotes(notes?: string | null): string | null {
+  const m = notes?.match(/Truck:\s*([^;]+)/);
+  return m ? m[1].trim() : null;
+}
+
+const tripWeights = (t: any): number[] =>
+  TRIP_NUMS.map(n => Number(t[`trip_${n}`]) || 0);
+
+const tripCount = (t: any) => tripWeights(t).filter(w => w > 0).length;
+
+const tonsOf = (t: any) => {
+  const sum = tripWeights(t).reduce((a, b) => a + b, 0);
+  return sum > 0 ? sum / 1000 : Number(t.net_tallage) || 0;
+};
+
+type FormState = {
+  trip_date: string;
+  vehicle_id: string;
+  driver_id: string;
+  status: string;
+  notes: string;
+  weights: Record<number, string>; // kg per trip, as typed
+  sources: Record<number, string>; // M/G/N/S/T per trip
+};
+
+const emptyForm = (): FormState => ({
+  trip_date: new Date().toISOString().split('T')[0],
+  vehicle_id: '',
+  driver_id: '',
+  status: 'completed',
+  notes: '',
+  weights: {},
+  sources: {},
+});
 
 export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | null; portalColor: string }) {
   const { showToast } = useToast();
@@ -23,46 +80,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-
-  // MCL Daily Form Schema with Area Abbreviations (M, G, N, S, T)
-  const emptyForm = {
-    trip_date: new Date().toISOString().split('T')[0],
-    vehicle_id: '',
-    driver_id: '',
-    // Area Abbreviations
-    M: '0', // MCL Mines
-    G: '0', // Gas
-    N: '0', // Ngamani
-    S: '0', // Minor St/Pile
-    T: '0', // Tezzo
-    TOTAL: '0',
-    // Multi-Trip Daily slots (Trip 1 - Trip 13)
-    trip_1: 0,
-    trip_2: 0,
-    trip_3: 0,
-    trip_4: 0,
-    trip_5: 0,
-    trip_6: 0,
-    trip_7: 0,
-    trip_8: 0,
-    trip_9: 0,
-    trip_10: 0,
-    trip_11: 0,
-    trip_12: 0,
-    trip_13: 0,
-    // Tonnage & Fuel Metrics
-    tons: 0,
-    cummulative_tons: 0,
-    trips_count: 0,
-    cummulative_trips: 0,
-    total_fuel_added: 0,
-    expected_fuel_bal: 0,
-    actual_fuel_bal: 0,
-    status: 'completed',
-    notes: '',
-  };
-
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<FormState>(emptyForm());
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -87,34 +105,87 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   }, [trips, isMCL, mclArea]);
 
   const openAdd = () => {
-    setForm(emptyForm);
+    setForm(emptyForm());
     setEditId(null);
     setModalOpen(true);
   };
 
   const openEdit = (t: any) => {
-    const { id, vehicle, driver, created_at, sub_account, mcl_area_id, ...rest } = t;
-    setForm({ ...emptyForm, ...rest });
-    setEditId(id);
+    const weights: Record<number, string> = {};
+    TRIP_NUMS.forEach(n => {
+      const w = Number(t[`trip_${n}`]) || 0;
+      if (w > 0) weights[n] = String(w);
+    });
+    setForm({
+      trip_date: t.trip_date,
+      vehicle_id: t.vehicle_id || '',
+      driver_id: t.driver_id || '',
+      status: t.status || 'completed',
+      notes: t.notes || '',
+      weights,
+      sources: parseSources(t.notes),
+    });
+    setEditId(t.id);
     setModalOpen(true);
   };
 
+  // Live totals shown inside the form
+  const formWeights = TRIP_NUMS.map(n => Number(form.weights[n]) || 0);
+  const formTrips = formWeights.filter(w => w > 0).length;
+  const formTons = formWeights.reduce((a, b) => a + b, 0) / 1000;
+
   const save = async () => {
+    if (!form.trip_date) { showToast('Please pick a date', 'error'); return; }
     setSaving(true);
-    const payload: any = { ...form, sub_account: subAccount };
+
+    const payload: any = {
+      sub_account: subAccount,
+      trip_date: form.trip_date,
+      vehicle_id: form.vehicle_id || null,
+      driver_id: form.driver_id || null,
+      status: form.status,
+      net_tallage: Number(formTons.toFixed(2)),
+    };
+    TRIP_NUMS.forEach(n => { payload[`trip_${n}`] = Number(form.weights[n]) || 0; });
+
+    // Areas used on this day -> departure_point (full names) and notes (per-trip codes)
+    const used = TRIP_NUMS.filter(n => (Number(form.weights[n]) || 0) > 0 && form.sources[n]);
+    const names: string[] = [];
+    used.forEach(n => {
+      const name = SOURCES[form.sources[n]];
+      if (name && !names.includes(name)) names.push(name);
+    });
+    payload.departure_point = names.join(' / ');
+
+    const plate = vehicles.find(v => v.id === form.vehicle_id)?.plate_number
+      || truckFromNotes(form.notes);
+    const parts: string[] = [];
+    if (plate) parts.push(`Truck: ${plate}`);
+    if (used.length) parts.push(`Sources: ${used.map(n => `Trip${n}=${form.sources[n]}`).join('; ')}`);
+    payload.notes = parts.join('; ');
+
+    // Cumulative totals for this truck within the same month (earlier days + today)
+    const month = form.trip_date.slice(0, 7);
+    const sameTruck = trips.filter(t =>
+      t.id !== editId &&
+      t.trip_date?.slice(0, 7) === month &&
+      t.trip_date < form.trip_date &&
+      (form.vehicle_id ? t.vehicle_id === form.vehicle_id : truckFromNotes(t.notes) === plate),
+    );
+    payload.cumulative_tons = Number((sameTruck.reduce((a, t) => a + tonsOf(t), 0) + formTons).toFixed(2));
+    payload.cumulative_trips = sameTruck.reduce((a, t) => a + tripCount(t), 0) + formTrips;
+
     if (isMCL && mclArea) payload.mcl_area_id = mclArea;
 
-    if (editId) {
-      const { error } = await supabase.from('sub_account_trips').update(payload).eq('id', editId);
-      if (error) showToast('Failed to save: ' + error.message, 'error');
-      else showToast('MCL Log updated successfully', 'success');
-    } else {
-      const { error } = await supabase.from('sub_account_trips').insert([payload]);
-      if (error) showToast('Failed to create: ' + error.message, 'error');
-      else showToast('MCL Log created successfully', 'success');
-    }
+    const { error } = editId
+      ? await supabase.from('sub_account_trips').update(payload).eq('id', editId)
+      : await supabase.from('sub_account_trips').insert([payload]);
+
+    if (error) showToast('Failed to save: ' + error.message, 'error');
+    else showToast(editId ? 'Daily log updated' : 'Daily log created', 'success');
+
     setSaving(false);
-    setModalOpen(false);
+    if (!error) setModalOpen(false);
     loadData();
   };
 
@@ -122,8 +193,8 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <PageHeader
-          title={isMCL ? 'MCL Operational Daily Logs' : 'Trips'}
-          subtitle="Shale & Limestone multi-trip logs, area breakdown (M, G, N, S, T), and fuel tracking"
+          title={isMCL ? 'MCL Daily Trip Logs' : 'Trips'}
+          subtitle={isMCL ? 'Daily loads per truck, material source, tons and cumulative totals' : 'Trip records and dispatch'}
           icon={<RouteIcon className="h-6 w-6" />}
           iconColor={portalColor}
           onAdd={openAdd}
@@ -134,15 +205,15 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
           className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
         >
           <Upload className="h-4 w-4 text-slate-500" />
-          Bulk Excel Import
+          Bulk Import
         </button>
       </div>
 
       {loading ? (
-        <LoadingSpinner message="Loading MCL daily trip logs..." />
+        <LoadingSpinner message="Loading trip logs..." />
       ) : visibleTrips.length === 0 ? (
         <div className="card">
-          <EmptyState icon={<RouteIcon className="h-8 w-8" />} title="No daily trip logs found" message="Upload your monthly Excel sheet or add a daily log manually." />
+          <EmptyState icon={<RouteIcon className="h-8 w-8" />} title="No trip logs found" message="Import your monthly sheet or add a daily log." />
         </div>
       ) : (
         <div className="card table-wrapper overflow-x-auto">
@@ -152,36 +223,28 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
                 <th>Date</th>
                 <th>Truck</th>
                 <th>Driver</th>
-                {isMCL && <>
-                  <th title="MCL Mines">M</th>
-                  <th title="Gas">G</th>
-                  <th title="Ngamani">N</th>
-                  <th title="Minor St/Pile">S</th>
-                  <th title="Tezzo">T</th>
-                  <th>Total</th>
-                  <th>Daily Tons</th>
-                  <th>Cum. Tons</th>
-                </>}
+                <th>Areas</th>
+                <th>Trips</th>
+                <th>Tons</th>
+                <th>Cum. Tons</th>
+                <th>Cum. Trips</th>
                 <th>Status</th>
-                <th>Action</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {visibleTrips.map(t => (
                 <tr key={t.id}>
                   <td className="font-medium text-slate-700">{t.trip_date}</td>
-                  <td className="font-bold text-slate-800">{t.vehicle?.plate_number || '—'}</td>
+                  <td className="font-bold text-slate-800">
+                    {t.vehicle?.plate_number || truckFromNotes(t.notes) || '—'}
+                  </td>
                   <td className="text-slate-600">{t.driver?.name || '—'}</td>
-                  {isMCL && <>
-                    <td className="font-semibold text-slate-700">{t.M || 0}</td>
-                    <td className="font-semibold text-slate-700">{t.G || 0}</td>
-                    <td className="font-semibold text-slate-700">{t.N || 0}</td>
-                    <td className="font-semibold text-slate-700">{t.S || 0}</td>
-                    <td className="font-semibold text-slate-700">{t.T || 0}</td>
-                    <td className="font-bold text-blue-700">{t.TOTAL || 0}</td>
-                    <td className="font-semibold text-emerald-700">{t.tons || 0} T</td>
-                    <td className="text-slate-600">{t.cummulative_tons || 0} T</td>
-                  </>}
+                  <td className="text-slate-600">{t.departure_point || '—'}</td>
+                  <td className="font-semibold text-blue-700">{tripCount(t)}</td>
+                  <td className="font-semibold text-emerald-700">{tonsOf(t).toFixed(2)} T</td>
+                  <td className="text-slate-600">{Number(t.cumulative_tons || 0).toFixed(2)} T</td>
+                  <td className="text-slate-600">{t.cumulative_trips || 0}</td>
                   <td>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700">
                       {t.status || 'completed'}
@@ -199,16 +262,15 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         </div>
       )}
 
-      {/* Modal Form */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit MCL Operational Log' : 'Add MCL Operational Log'} size="xl">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Daily Log' : 'Add Daily Log'} size="xl">
         <div className="space-y-6 max-h-[75vh] overflow-y-auto p-1">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <label className="label">Log Date *</label>
+              <label className="label">Date *</label>
               <input type="date" className="input" value={form.trip_date} onChange={e => setForm({ ...form, trip_date: e.target.value })} />
             </div>
             <div>
-              <label className="label">Truck / Lorry *</label>
+              <label className="label">Truck *</label>
               <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
                 <option value="">Select Truck</option>
                 {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number}</option>)}
@@ -223,63 +285,50 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
             </div>
           </div>
 
-          {/* Area Breakdown (M, G, N, S, T) */}
           <div>
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Area Breakdown (M, G, N, S, T)</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">M (Mines)</label>
-                <input type="text" className="input text-xs" value={form.M} onChange={e => setForm({ ...form, M: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">G (Gas)</label>
-                <input type="text" className="input text-xs" value={form.G} onChange={e => setForm({ ...form, G: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">N (Ngamani)</label>
-                <input type="text" className="input text-xs" value={form.N} onChange={e => setForm({ ...form, N: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">S (Minor St/Pile)</label>
-                <input type="text" className="input text-xs" value={form.S} onChange={e => setForm({ ...form, S: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">T (Tezzo)</label>
-                <input type="text" className="input text-xs" value={form.T} onChange={e => setForm({ ...form, T: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">TOTAL</label>
-                <input type="text" className="input text-xs font-bold text-blue-700" value={form.TOTAL} onChange={e => setForm({ ...form, TOTAL: e.target.value })} />
-              </div>
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Trips: weight (kg) and source area</h4>
+            <p className="text-[11px] text-slate-400 mb-2">
+              M = MCL Mines, G = Gas, N = Ngamani, S = Minor St/Pile, T = TEZZO (Ngamani)
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              {TRIP_NUMS.map(n => (
+                <div key={n}>
+                  <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Trip {n}</label>
+                  <div className="flex gap-1">
+                    <input
+                      type="number"
+                      className="input text-xs py-1 px-1 w-full"
+                      placeholder="kg"
+                      value={form.weights[n] ?? ''}
+                      onChange={e => setForm({ ...form, weights: { ...form.weights, [n]: e.target.value } })}
+                    />
+                    <select
+                      className="input text-xs py-1 px-1 w-14"
+                      value={form.sources[n] ?? ''}
+                      onChange={e => setForm({ ...form, sources: { ...form.sources, [n]: e.target.value } })}
+                    >
+                      <option value="">–</option>
+                      {Object.keys(SOURCES).map(k => <option key={k} value={k} title={SOURCES[k]}>{k}</option>)}
+                    </select>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Daily Trip Runs (Trip 1 - Trip 13) */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Daily Trip Runs (Trip 1 to 13)</h4>
-            <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(num => {
-                const key = `trip_${num}` as keyof typeof form;
-                return (
-                  <div key={num}>
-                    <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Trip {num}</label>
-                    <input
-                      type="number"
-                      className="input text-xs text-center py-1 px-1"
-                      value={form[key] as number}
-                      onChange={e => setForm({ ...form, [key]: Number(e.target.value) })}
-                    />
-                  </div>
-                );
-              })}
-            </div>
+          <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm">
+            <div><span className="text-slate-500">Trips today:</span> <b>{formTrips}</b></div>
+            <div><span className="text-slate-500">Tons today:</span> <b>{formTons.toFixed(2)} T</b></div>
+            <p className="col-span-2 text-[11px] text-slate-400">
+              Tons and cumulative totals are calculated automatically when you save.
+            </p>
           </div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2 border-t pt-3">
           <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel</button>
           <button onClick={save} disabled={saving} className="btn-primary" style={{ background: portalColor }}>
-            {saving ? 'Saving...' : 'Save Log Entry'}
+            {saving ? 'Saving...' : 'Save Log'}
           </button>
         </div>
       </Modal>
@@ -291,10 +340,10 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         portalColor={portalColor}
         subAccount={subAccount}
         sampleColumns={[
-          'DATE', 'M', 'G', 'N', 'S', 'T', 'TOTAL',
-          'Trip 1', 'Trip 2', 'Trip 3', 'Trip 4', 'Trip 5', 'Trip 6', 
-          'Trip 7', 'Trip 8', 'Trip 9', 'Trip 10', 'Trip 11', 'Trip 12', 'Trip 13', 
-          'TONS', 'CUMMULATIVE TONS', 'TRIPS', 'CUMMULATIVE TRIPS'
+          'trip_date', 'departure_point',
+          'trip_1', 'trip_2', 'trip_3', 'trip_4', 'trip_5', 'trip_6', 'trip_7',
+          'trip_8', 'trip_9', 'trip_10', 'trip_11', 'trip_12', 'trip_13',
+          'net_tallage', 'cumulative_tons', 'cumulative_trips', 'notes',
         ]}
         onSuccess={loadData}
       />
