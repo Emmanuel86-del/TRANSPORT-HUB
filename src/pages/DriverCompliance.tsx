@@ -1,278 +1,197 @@
-import { useEffect, useState, useCallback } from 'react';
-import { ShieldCheck, AlertTriangle, Bell, Edit, Upload } from 'lucide-react';
-import { supabase, getSubAccountFilter } from '@/lib/supabase';
-import { useAuth } from '@/lib/auth';
-import { PageHeader } from '@/components/PageHeader';
-import { Modal } from '@/components/Modal';
-import { LoadingSpinner, EmptyState } from '@/components/Shared';
-import { BulkImportModal } from '@/components/BulkImportModal';
-import { SubAccount } from '@/lib/portals';
+import { useState, CSSProperties } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useToast } from '@/components/Toast';
+import { PortalConfig, PORTALS } from '@/lib/portals';
+import { Truck, Lock, Mail, User, Building, Eye, EyeOff } from 'lucide-react';
 
-interface ComplianceRecord {
-  id: string;
-  vehicle_id: string;
-  vehicle?: { plate_number: string; make?: string; model?: string };
-  insurance_start: string;
-  insurance_expiry: string;
-  comesa_start: string;
-  comesa_expiry: string;
-  ntsa_inspection_start: string;
-  ntsa_inspection_expiry: string;
-  truck_insurance_start: string;
-  truck_insurance_expiry: string;
-  trailer_insurance_start: string;
-  trailer_insurance_expiry: string;
-}
+export function AuthPage({ portal }: { portal?: PortalConfig }) {
+  const p = portal ?? PORTALS.master;
+  const { showToast } = useToast();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [subAccount, setSubAccount] = useState('mcl');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-function getExpiryStatus(expiryDateStr: string) {
-  if (!expiryDateStr) return 'ok';
-  const today = new Date();
-  const expiry = new Date(expiryDateStr);
-  const diffTime = expiry.getTime() - today.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const isMasterPortal = p.slug === 'master';
+  const accentVars = { '--accent': p.color } as CSSProperties;
+  const inputClass =
+    'w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 outline-none focus:border-[color:var(--accent)]';
 
-  if (diffDays < 0) return 'expired';
-  if (diffDays <= 14) return 'warning-2w';
-  if (diffDays <= 30) return 'warning-1m';
-  return 'ok';
-}
-
-function StatusBadge({ date }: { date: string }) {
-  const status = getExpiryStatus(date);
-  if (!date) return <span className="text-slate-300">—</span>;
-
-  if (status === 'expired') {
-    return <span className="badge-danger flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Expired ({date})</span>;
-  }
-  if (status === 'warning-2w') {
-    return <span className="badge-danger flex items-center gap-1"><Bell className="h-3 w-3" /> Expiring in &lt;2 wks ({date})</span>;
-  }
-  if (status === 'warning-1m') {
-    return <span className="badge-warning flex items-center gap-1"><Bell className="h-3 w-3" /> Expiring in &lt;1 mo ({date})</span>;
-  }
-  return <span className="badge-success">{date}</span>;
-}
-
-export function FleetCompliance({ portalColor = '#0f172a' }: { portalColor?: string }) {
-  const { profile } = useAuth();
-  const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'mcl') as SubAccount;
-
-  const [loading, setLoading] = useState(true);
-  const [records, setRecords] = useState<ComplianceRecord[]>([]);
-  const [vehicles, setVehicles] = useState<any[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [isBulkOpen, setIsBulkOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const emptyForm = {
-    vehicle_id: '',
-    insurance_start: '',
-    insurance_expiry: '',
-    comesa_start: '',
-    comesa_expiry: '',
-    ntsa_inspection_start: '',
-    ntsa_inspection_expiry: '',
-    truck_insurance_start: '',
-    truck_insurance_expiry: '',
-    trailer_insurance_start: '',
-    trailer_insurance_expiry: '',
+  const switchMode = (signUp: boolean) => {
+    setIsSignUp(signUp);
+    setErrorMsg('');
   };
 
-  const [form, setForm] = useState(emptyForm);
-
-  const loadData = useCallback(async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
-    const [compRes, vehRes] = await Promise.all([
-      supabase.from('vehicle_compliance').select('*, vehicle:vehicles(plate_number, make, model)').order('created_at', { ascending: false }),
-      supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
-    ]);
-    setRecords(compRes.data || []);
-    setVehicles(vehRes.data || []);
-    setLoading(false);
-  }, []);
+    setErrorMsg('');
 
-  useEffect(() => { loadData(); }, [loadData]);
-
-  const activeAlarms = records.filter(r => {
-    return [r.insurance_expiry, r.comesa_expiry, r.ntsa_inspection_expiry, r.truck_insurance_expiry, r.trailer_insurance_expiry]
-      .some(date => {
-        const s = getExpiryStatus(date);
-        return s === 'expired' || s === 'warning-2w' || s === 'warning-1m';
-      });
-  });
-
-  const saveRecord = async () => {
-    setSaving(true);
-    if (editId) {
-      await supabase.from('vehicle_compliance').update(form).eq('id', editId);
-    } else {
-      await supabase.from('vehicle_compliance').insert(form);
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              sub_account: isMasterPortal ? subAccount : p.slug,
+              role: 'employee',
+            },
+          },
+        });
+        if (error) throw error;
+        showToast('Account created successfully! You can now sign in.', 'success');
+        setIsSignUp(false);
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        showToast('Signed in successfully!', 'success');
+      }
+    } catch (err: any) {
+      const msg = err?.message || 'Authentication failed';
+      setErrorMsg(msg);
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
     }
-    setSaving(false);
-    setModalOpen(false);
-    loadData();
   };
 
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <PageHeader 
-          title="Fleet Compliance & Insurance" 
-          subtitle="Monitor Insurance, COMESA, NTSA Inspections, Truck & Trailer Expirations" 
-          icon={<ShieldCheck className="h-6 w-6" />} 
-          iconColor={portalColor}
-          onAdd={() => { setForm(emptyForm); setEditId(null); setModalOpen(true); }} 
-          addLabel="Add Compliance Record"
-        />
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => setIsBulkOpen(true)} 
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg shadow-sm hover:bg-slate-50 transition-colors"
-          >
-            <Upload className="h-4 w-4 text-slate-500" /> Bulk Import
-          </button>
+    <div
+      className="min-h-screen flex items-center justify-center p-4 animate-fade-in"
+      style={{ background: p.colorDark, ...accentVars }}
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="px-8 py-9 text-center text-white" style={{ background: p.color }}>
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
+            <Truck className="h-8 w-8" style={{ color: p.color }} />
+          </div>
+          <h1 className="text-xl font-bold tracking-tight">{p.fullName}</h1>
+          <p className="mt-1 text-sm text-white/70">Fleet Management System</p>
+        </div>
+
+        <div className="space-y-5 p-8">
+          <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+            <button
+              type="button"
+              onClick={() => switchMode(false)}
+              className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
+                !isSignUp ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode(true)}
+              className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
+                isSignUp ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+            {isSignUp && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Full Name</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    autoComplete="off"
+                    className={inputClass}
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={e => setFullName(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {isSignUp && isMasterPortal && (
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Sub-Account / Portal</label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <select
+                    className={inputClass}
+                    value={subAccount}
+                    onChange={e => setSubAccount(e.target.value)}
+                  >
+                    <option value="mcl">MCL</option>
+                    <option value="tarmal">TARMAL</option>
+                    <option value="csl">CSL</option>
+                    <option value="mushroom">MUSHROOM</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="email"
+                  required
+                  autoComplete="off"
+                  className={inputClass}
+                  placeholder="name@example.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="new-password"
+                  className={`${inputClass} pr-10`}
+                  placeholder="Your password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            {errorMsg && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {errorMsg}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-lg py-3 text-sm font-semibold text-white shadow-md transition-opacity hover:opacity-90 disabled:opacity-60"
+              style={{ background: p.color }}
+            >
+              {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
+            </button>
+          </form>
         </div>
       </div>
-
-      {activeAlarms.length > 0 && (
-        <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
-          <Bell className="h-5 w-5 text-amber-600 mt-0.5 animate-bounce" />
-          <div>
-            <h4 className="text-sm font-bold text-amber-900">Compliance Expiry Notice</h4>
-            <p className="text-sm text-amber-700 mt-0.5">
-              You have <span className="font-semibold">{activeAlarms.length}</span> vehicle(s) with compliance documents expiring within 1 month or already expired.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <LoadingSpinner message="Loading compliance records..." />
-      ) : records.length === 0 ? (
-        <div className="card">
-          <EmptyState icon={<ShieldCheck className="h-8 w-8" />} title="No compliance logs found" message="Add compliance schedules manually or use bulk import." />
-        </div>
-      ) : (
-        <div className="card table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Vehicle</th>
-                <th>General Insurance</th>
-                <th>COMESA Insurance</th>
-                <th>NTSA Inspection</th>
-                <th>Truck Insurance</th>
-                <th>Trailer Insurance</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map(r => (
-                <tr key={r.id}>
-                  <td className="font-semibold text-slate-800">
-                    {r.vehicle?.plate_number || 'Unknown'} <span className="block text-xs font-normal text-slate-500">{r.vehicle?.make} {r.vehicle?.model}</span>
-                  </td>
-                  <td>
-                    <div className="text-xs">Start: {r.insurance_start || '—'}</div>
-                    <StatusBadge date={r.insurance_expiry} />
-                  </td>
-                  <td>
-                    <div className="text-xs">Start: {r.comesa_start || '—'}</div>
-                    <StatusBadge date={r.comesa_expiry} />
-                  </td>
-                  <td>
-                    <div className="text-xs">Start: {r.ntsa_inspection_start || '—'}</div>
-                    <StatusBadge date={r.ntsa_inspection_expiry} />
-                  </td>
-                  <td>
-                    <div className="text-xs">Start: {r.truck_insurance_start || '—'}</div>
-                    <StatusBadge date={r.truck_insurance_expiry} />
-                  </td>
-                  <td>
-                    <div className="text-xs">Start: {r.trailer_insurance_start || '—'}</div>
-                    <StatusBadge date={r.trailer_insurance_expiry} />
-                  </td>
-                  <td>
-                    <button 
-                      onClick={() => {
-                        const { id, created_at, vehicle, ...rest } = r as any;
-                        setForm(rest);
-                        setEditId(id);
-                        setModalOpen(true);
-                      }} 
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Add/Edit Modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Compliance Record' : 'Add Fleet Compliance'} size="xl">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="label">Select Vehicle *</label>
-            <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
-              <option value="">Choose vehicle plate number</option>
-              {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number} ({v.make} {v.model})</option>)}
-            </select>
-          </div>
-
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">General Insurance</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.insurance_start} onChange={e => setForm({ ...form, insurance_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.insurance_expiry} onChange={e => setForm({ ...form, insurance_expiry: e.target.value })} /></div>
-
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">COMESA Insurance</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.comesa_start} onChange={e => setForm({ ...form, comesa_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.comesa_expiry} onChange={e => setForm({ ...form, comesa_expiry: e.target.value })} /></div>
-
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">NTSA Inspection</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.ntsa_inspection_start} onChange={e => setForm({ ...form, ntsa_inspection_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.ntsa_inspection_expiry} onChange={e => setForm({ ...form, ntsa_inspection_expiry: e.target.value })} /></div>
-
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">Truck Insurance</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.truck_insurance_start} onChange={e => setForm({ ...form, truck_insurance_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.truck_insurance_expiry} onChange={e => setForm({ ...form, truck_insurance_expiry: e.target.value })} /></div>
-
-          <div className="sm:col-span-2 border-t pt-3 font-semibold text-sm text-slate-700">Trailer Insurance</div>
-          <div><label className="label">Start Date</label><input type="date" className="input" value={form.trailer_insurance_start} onChange={e => setForm({ ...form, trailer_insurance_start: e.target.value })} /></div>
-          <div><label className="label">Expiry Date</label><input type="date" className="input" value={form.trailer_insurance_expiry} onChange={e => setForm({ ...form, trailer_insurance_expiry: e.target.value })} /></div>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={() => setModalOpen(false)} className="btn-secondary">Cancel/Close</button>
-          <button onClick={saveRecord} disabled={saving || !form.vehicle_id} className="btn-primary">{saving ? 'Saving...' : 'Save Compliance'}</button>
-        </div>
-      </Modal>
-
-      {/* Bulk Import Modal */}
-      <BulkImportModal
-        open={isBulkOpen}
-        onClose={() => setIsBulkOpen(false)}
-        tableName="vehicle_compliance"
-        portalColor={portalColor}
-        subAccount={subAccount}
-        sampleColumns={[
-          'vehicle_id',
-          'insurance_start',
-          'insurance_expiry',
-          'comesa_start',
-          'comesa_expiry',
-          'ntsa_inspection_start',
-          'ntsa_inspection_expiry',
-          'truck_insurance_start',
-          'truck_insurance_expiry',
-          'trailer_insurance_start',
-          'trailer_insurance_expiry',
-        ]}
-        onSuccess={loadData}
-      />
     </div>
   );
 }
