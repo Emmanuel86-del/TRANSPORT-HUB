@@ -31,19 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const initialized = useRef(false);
 
-  // Self-healing profile fetcher with instant URL-slug fallback
-  const fetchProfile = useCallback(async (userId: string, userEmail?: string): Promise<Profile> => {
-    const currentSlug = getCurrentSlug();
-    const resolvedSubAccount = currentSlug !== 'master' ? currentSlug : 'mcl';
-
-    const fallbackProfile: Profile = {
-      id: userId,
-      email: userEmail || 'admin@company.com',
-      full_name: 'System Administrator',
-      role: 'corporate_admin',
-      sub_account: resolvedSubAccount,
-    };
-
+  // Profile fetcher from Supabase
+  const fetchProfile = useCallback(async (userId: string, userEmail?: string): Promise<Profile | null> => {
     try {
       const profilePromise = supabase
         .from('profiles')
@@ -58,15 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = (await Promise.race([profilePromise, timeoutPromise])) as any;
 
       if (error || !data) {
-        return fallbackProfile;
-      }
-      
-      if (data.sub_account === 'master' && currentSlug !== 'master') {
-        data.sub_account = currentSlug;
+        return null;
       }
       return data as Profile;
     } catch (err) {
-      return fallbackProfile;
+      return null;
     }
   }, []);
 
@@ -83,6 +68,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (sessionError) {
         setAuthError(sessionError.message);
+        setSession(null);
+        setUser(null);
+        setProfile(null);
         clearTimeout(safetyTimer);
         setLoading(false);
         return;
@@ -98,19 +86,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSubAccountFilter(userProfile.sub_account);
         }
       } else {
-        // Unauthenticated visitor fallback based on current route path
-        const slug = getCurrentSlug();
-        setProfile({
-          id: 'guest',
-          email: 'guest@company.com',
-          full_name: 'Guest User',
-          role: 'employee',
-          sub_account: slug,
-        });
-        setSubAccountFilter(slug);
+        // STRICT AUTH: No guest fallback — force password login
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setSubAccountFilter(null);
       }
     } catch (err) {
       setAuthError('Connection error. Please try again.');
+      setSession(null);
+      setUser(null);
+      setProfile(null);
     } finally {
       clearTimeout(safetyTimer);
       setLoading(false);
@@ -134,15 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSubAccountFilter(userProfile.sub_account);
         }
       } else {
-        const slug = getCurrentSlug();
-        setProfile({
-          id: 'guest',
-          email: 'guest@company.com',
-          full_name: 'Guest User',
-          role: 'employee',
-          sub_account: slug,
-        });
-        setSubAccountFilter(slug);
+        // STRICT AUTH: Disallow unauthenticated visitors from accessing dashboard state
+        setSession(null);
+        setUser(null);
+        setProfile(null);
+        setSubAccountFilter(null);
       }
 
       setLoading(false);
@@ -160,6 +142,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.user) {
         const userProfile = await fetchProfile(data.user.id, data.user.email);
         setProfile(userProfile);
+        if (userProfile?.sub_account) {
+          setSubAccountFilter(userProfile.sub_account);
+        }
       }
 
       return { error: null };
