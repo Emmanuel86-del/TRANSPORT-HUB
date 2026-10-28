@@ -64,9 +64,17 @@ export function BulkImportModal({
     reader.readAsText(file);
   };
 
+  // Columns that must stay as text (dates, ids, labels), even if the name contains "trip" or "fuel"
+  const TEXT_COLUMNS = new Set([
+    'trip_date', 'fuel_date', 'sub_account', 'mcl_area_id', 'departure_point',
+    'arrival_point', 'destination_city', 'trailer_number', 'status', 'notes',
+    'vehicle_id', 'driver_id',
+  ]);
+
   // Helper to check if a column is typically numeric
   const isNumericHeader = (header: string): boolean => {
-    const h = header.toLowerCase();
+    const h = header.trim().toLowerCase();
+    if (TEXT_COLUMNS.has(h) || h.includes('date')) return false;
     return (
       h.includes('ton') ||
       h.includes('trip') ||
