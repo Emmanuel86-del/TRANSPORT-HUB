@@ -9,7 +9,7 @@ import { StatCard } from '@/components/StatCard';
 import { Trip, Vehicle, Driver, SparePart, WorkRecord } from '@/types';
 import { LoadingSpinner } from '@/components/Shared';
 import { ContainersDueSoonAlert } from '@/components/ContainersDueSoonAlert';
-import { MCLArea, SubAccount, slugFromPath } from '@/lib/portals';
+import { MCLArea } from '@/lib/portals';
 
 const SUB_ACCOUNTS = ['mcl', 'tarmal', 'csl', 'mushroom'] as const;
 
@@ -38,10 +38,18 @@ export function Dashboard({
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  // Determine current sub-account from props, URL path slug, profile, or fallback
-  const pathSlug = slugFromPath(window.location.pathname);
-  let currentSubAccount = subAccountProp || pathSlug || profile?.sub_account || getSubAccountFilter() || 'mcl';
-  if (currentSubAccount === 'admin') currentSubAccount = 'mcl';
+  // Determine if we are in Master view or a specific Sub-Account view based on URL path
+  const pathSegments = window.location.pathname.split('/').filter(Boolean);
+  let currentSubAccount = subAccountProp;
+  if (!currentSubAccount && pathSegments.length >= 2 && pathSegments[0] === 'admin') {
+    const potential = pathSegments[1];
+    if (SUB_ACCOUNTS.includes(potential as any)) {
+      currentSubAccount = potential;
+    } else {
+      currentSubAccount = 'master';
+    }
+  }
+  if (!currentSubAccount) currentSubAccount = profile?.sub_account ?? getSubAccountFilter() ?? 'master';
 
   const isMasterView = currentSubAccount === 'master' || currentSubAccount === 'all';
 
@@ -61,23 +69,24 @@ export function Dashboard({
       setLoading(true);
 
       if (isMasterView) {
-        // Load Master Summaries across all sub-accounts with correct schema columns
+        // Load Master Summaries across all sub-accounts
         const results: Record<string, SubAccountSummary> = {};
         for (const sa of SUB_ACCOUNTS) {
           const [tripsRes, vehiclesRes, driversRes, containersRes] = await Promise.all([
-            supabase.from('sub_account_trips').select('net_tallage, fuel_cost, status, distance_km, freight_amount').eq('sub_account', sa),
-            supabase.from('vehicles').select('id', { count: 'exact' }).eq('sub_account', sa),
-            supabase.from('drivers').select('id', { count: 'exact' }).eq('sub_account', sa),
-            supabase.from('sub_account_containers').select('id', { count: 'exact' }).eq('sub_account', sa),
+            supabase.from('trips').select('freight_amount, fuel_cost, distance_km, status').eq('sub_account', sa),
+            supabase.from('vehicles').select('id', { count: 'exact' }).eq('sub_account', sa).eq('status', 'active'),
+            supabase.from('drivers').select('id', { count: 'exact' }).eq('sub_account', sa).eq('status', 'active'),
+            supabase.from('sub_account_containers').select('id', { count: 'exact' }).eq('sub_account', sa).eq('status', 'active'),
           ]);
 
           const tripList = tripsRes.data || [];
+          const completed = tripList.filter(t => t.status === 'completed');
 
           results[sa] = {
             subAccount: sa.toUpperCase(),
-            totalRevenue: tripList.reduce((sum, t) => sum + (Number(t.freight_amount) || (Number(t.net_tallage) || 0) * 420 || 0), 0),
-            totalDistance: tripList.reduce((sum, t) => sum + (Number(t.distance_km) || 0), 0),
-            fuelCost: tripList.reduce((sum, t) => sum + (Number(t.fuel_cost) || 0), 0),
+            totalRevenue: completed.reduce((sum, t) => sum + (t.freight_amount || 0), 0),
+            totalDistance: tripList.reduce((sum, t) => sum + (t.distance_km || 0), 0),
+            fuelCost: tripList.reduce((sum, t) => sum + (t.fuel_cost || 0), 0),
             activeVehicles: vehiclesRes.count || 0,
             activeDrivers: driversRes.count || 0,
             totalTrips: tripList.length,
@@ -87,13 +96,13 @@ export function Dashboard({
         setSummaries(results);
       } else {
         // Load Specific Sub-Account Operational Data
-        let tripsQuery = supabase.from('sub_account_trips').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`).order('trip_date', { ascending: false }).limit(50);
-        let vehiclesQuery = supabase.from('vehicles').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`);
-        let driversQuery = supabase.from('drivers').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`);
-        let partsQuery = supabase.from('spare_parts').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`);
-        let workQuery = supabase.from('work_records').select('*').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`).order('work_date', { ascending: false });
-        let vcQuery = supabase.from('vehicle_compliance_items').select('id, vehicle_id, compliance_type, expiry_date, vehicle:vehicles(plate_number)').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`).order('expiry_date', { ascending: true, nullsFirst: false });
-        let dcQuery = supabase.from('driver_compliance_items').select('id, driver_id, compliance_type, expiry_date, driver:drivers(name)').or(`sub_account.eq.${currentSubAccount},sub_account.eq.master`).order('expiry_date', { ascending: true, nullsFirst: false });
+        let tripsQuery = supabase.from('trips').select('*, driver:drivers(*), vehicle:vehicles(*)').eq('sub_account', currentSubAccount).order('trip_date', { ascending: false }).limit(50);
+        let vehiclesQuery = supabase.from('vehicles').select('*').eq('sub_account', currentSubAccount);
+        let driversQuery = supabase.from('drivers').select('*').eq('sub_account', currentSubAccount);
+        let partsQuery = supabase.from('spare_parts').select('*').eq('sub_account', currentSubAccount);
+        let workQuery = supabase.from('work_records').select('*').eq('sub_account', currentSubAccount).order('work_date', { ascending: false });
+        let vcQuery = supabase.from('vehicle_compliance_items').select('id, vehicle_id, compliance_type, expiry_date, vehicle:vehicles(plate_number)').eq('sub_account', currentSubAccount).order('expiry_date', { ascending: true, nullsFirst: false });
+        let dcQuery = supabase.from('driver_compliance_items').select('id, driver_id, compliance_type, expiry_date, driver:drivers(name)').eq('sub_account', currentSubAccount).order('expiry_date', { ascending: true, nullsFirst: false });
 
         if (currentSubAccount === 'mcl' && mclArea) {
           tripsQuery = tripsQuery.eq('mcl_area_id', mclArea);
@@ -190,14 +199,16 @@ export function Dashboard({
 
   // Render Specific Sub-Account Operational Dashboard (MCL, Tarmal, CSL, Mushroom)
   const activeTrips = trips.filter(t => t.status === 'in_progress' || t.status === 'scheduled');
-  const completedTrips = trips.filter(t => t.status === 'completed' || !t.status);
-  const activeVehicles = vehicles;
-  const activeDrivers = drivers;
-  const lowStockParts = spareParts.filter(p => (p.quantity_in_stock || 0) <= (p.minimum_stock || 5));
-  const totalRevenue = completedTrips.reduce((sum, t) => sum + (Number(t.freight_amount) || (Number(t.net_tallage) || 0) * 420 || 0), 0);
-  const totalFuelCost = trips.reduce((sum, t) => sum + (Number(t.fuel_cost) || 0), 0);
+  const completedTrips = trips.filter(t => t.status === 'completed');
+  const activeVehicles = vehicles.filter(v => v.status === 'active');
+  const activeDrivers = drivers.filter(d => d.status === 'active');
+  const lowStockParts = spareParts.filter(p => p.quantity_in_stock <= p.minimum_stock);
+  const totalRevenue = completedTrips.reduce((sum, t) => sum + (t.freight_amount || 0), 0);
+  const totalFuelCost = trips.reduce((sum, t) => sum + (t.fuel_cost || 0), 0);
   const totalWorkCost = workRecords.reduce((sum, w) => sum + (w.labor_cost || 0) + (w.parts_cost || 0), 0);
-  const totalDistance = trips.reduce((sum, t) => sum + (Number(t.distance_km) || 0), 0);
+  const totalDistance = trips.reduce((sum, t) => sum + (t.distance_km || 0), 0);
+  const recentTrips = trips.slice(0, 5);
+  const recentWork = workRecords.slice(0, 5);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -252,7 +263,7 @@ export function Dashboard({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Active Vehicles" value={String(activeVehicles.length)} icon={<Truck className="h-6 w-6" />} color="blue" />
         <StatCard label="Active Drivers" value={String(activeDrivers.length)} icon={<Users className="h-6 w-6" />} color="emerald" />
-        <StatCard label="Active/Scheduled Trips" value={String(activeTrips.length || trips.length)} icon={<Calendar className="h-6 w-6" />} color="amber" />
+        <StatCard label="Active/Scheduled Trips" value={String(activeTrips.length)} icon={<Calendar className="h-6 w-6" />} color="amber" />
         <StatCard label="Low Stock Parts" value={String(lowStockParts.length)} icon={<AlertTriangle className="h-6 w-6" />} color={lowStockParts.length > 0 ? 'rose' : 'slate'} />
       </div>
     </div>
