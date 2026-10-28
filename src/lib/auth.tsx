@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, useRef, Re
 import { Session, User } from '@supabase/supabase-js';
 import { supabase, setSubAccountFilter } from '@/lib/supabase';
 import { Profile } from '@/types';
-import { SubAccount, slugFromPath, pathForSlug } from '@/lib/portals';
+import { SubAccount, slugFromPath } from '@/lib/portals';
 
 type AuthState = {
   session: Session | null;
@@ -20,7 +20,7 @@ type AuthState = {
 const AuthContext = createContext<AuthState | undefined>(undefined);
 
 function getCurrentSlug(): SubAccount {
-  return slugFromPath(window.location.pathname) ?? 'master';
+  return slugFromPath(window.location.pathname) ?? 'mcl';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -31,15 +31,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const initialized = useRef(false);
 
-  // Self-healing profile fetcher: never returns null so you are never logged out on timeout
+  // Self-healing profile fetcher with instant URL-slug fallback
   const fetchProfile = useCallback(async (userId: string, userEmail?: string): Promise<Profile> => {
     const currentSlug = getCurrentSlug();
+    const resolvedSubAccount = currentSlug !== 'master' ? currentSlug : 'mcl';
+
     const fallbackProfile: Profile = {
       id: userId,
       email: userEmail || 'admin@company.com',
       full_name: 'System Administrator',
       role: 'corporate_admin',
-      sub_account: currentSlug === 'master' ? 'master' : currentSlug,
+      sub_account: resolvedSubAccount,
     };
 
     try {
@@ -50,20 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
       );
 
       const { data, error } = (await Promise.race([profilePromise, timeoutPromise])) as any;
 
       if (error || !data) {
-        console.warn('Profile fetch missed or timed out. Using self-healing fallback profile.');
-        // Silently ensure profile exists in DB
-        await supabase.from('profiles').upsert([fallbackProfile]).select().maybeSingle();
         return fallbackProfile;
+      }
+      
+      if (data.sub_account === 'master' && currentSlug !== 'master') {
+        data.sub_account = currentSlug;
       }
       return data as Profile;
     } catch (err) {
-      console.warn('Profile fetch exception, using fallback profile:', err);
       return fallbackProfile;
     }
   }, []);
@@ -74,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const safetyTimer = setTimeout(() => {
       setLoading(false);
-    }, 8000);
+    }, 4000);
 
     try {
       const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
@@ -90,12 +92,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(currentSession?.user ?? null);
 
       if (currentSession?.user) {
-        // Await profile completely before clearing loading state to prevent role flash
         const userProfile = await fetchProfile(currentSession.user.id, currentSession.user.email);
         setProfile(userProfile);
         if (userProfile?.sub_account) {
           setSubAccountFilter(userProfile.sub_account);
         }
+      } else {
+        // Unauthenticated visitor fallback based on current route path
+        const slug = getCurrentSlug();
+        setProfile({
+          id: 'guest',
+          email: 'guest@company.com',
+          full_name: 'Guest User',
+          role: 'employee',
+          sub_account: slug,
+        });
+        setSubAccountFilter(slug);
       }
     } catch (err) {
       setAuthError('Connection error. Please try again.');
@@ -122,8 +134,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSubAccountFilter(userProfile.sub_account);
         }
       } else {
-        setProfile(null);
-        setSubAccountFilter(null);
+        const slug = getCurrentSlug();
+        setProfile({
+          id: 'guest',
+          email: 'guest@company.com',
+          full_name: 'Guest User',
+          role: 'employee',
+          sub_account: slug,
+        });
+        setSubAccountFilter(slug);
       }
 
       setLoading(false);
@@ -189,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setSubAccountFilter(null);
-    window.location.replace('/admin');
+    window.location.replace('/mcl');
   };
 
   return (
@@ -200,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         loading,
         authError,
-        subAccount: (profile?.sub_account as SubAccount) ?? null,
+        subAccount: (profile?.sub_account as SubAccount) ?? getCurrentSlug(),
         signIn,
         signUp,
         signOut,
