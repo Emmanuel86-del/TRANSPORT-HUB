@@ -12,7 +12,7 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [subAccount, setSubAccount] = useState('mcl');
+  const [subAccount, setSubAccount] = useState('master');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -33,14 +33,17 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
 
     try {
       if (isSignUp) {
+        const selectedSubAccount = isMasterPortal ? subAccount : p.slug;
+        const assignedRole = selectedSubAccount === 'master' ? 'corporate_admin' : 'employee';
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
               full_name: fullName,
-              sub_account: isMasterPortal ? subAccount : p.slug,
-              role: 'employee',
+              sub_account: selectedSubAccount,
+              role: assignedRole,
             },
           },
         });
@@ -126,6 +129,7 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
                     value={subAccount}
                     onChange={e => setSubAccount(e.target.value)}
                   >
+                    <option value="master">MASTER ADMIN</option>
                     <option value="mcl">MCL</option>
                     <option value="tarmal">TARMAL</option>
                     <option value="csl">CSL</option>
