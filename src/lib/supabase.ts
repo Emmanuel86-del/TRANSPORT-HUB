@@ -3,7 +3,14 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-const rawClient = createClient(supabaseUrl, supabaseAnonKey);
+// Configured with persistSession: false to force mandatory password authentication on every session
+const rawClient = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
 
 let currentSubAccount: string | null = null;
 
