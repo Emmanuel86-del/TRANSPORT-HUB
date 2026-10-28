@@ -184,7 +184,7 @@ export function WorkspaceShell({
               <Menu className="h-5 w-5" />
             </button>
 
-            {/* Sub-Account Switcher dropdown (Always active on Master view) */}
+            {/* Sub-Account Switcher dropdown (Visible only for Master admin) */}
             {isMaster && (
               <div className="relative">
                 <button
