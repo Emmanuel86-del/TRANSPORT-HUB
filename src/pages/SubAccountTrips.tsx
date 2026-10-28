@@ -24,11 +24,18 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   const [editId, setEditId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // MCL Multi-Trip Daily Form Schema
+  // MCL Daily Form Schema with Area Abbreviations (M, G, N, S, T)
   const emptyForm = {
     trip_date: new Date().toISOString().split('T')[0],
     vehicle_id: '',
     driver_id: '',
+    // Area Abbreviations
+    M: '0', // MCL Mines
+    G: '0', // Gas
+    N: '0', // Ngamani
+    S: '0', // Minor St/Pile
+    T: '0', // Tezzo
+    TOTAL: '0',
     // Multi-Trip Daily slots (Trip 1 - Trip 13)
     trip_1: 0,
     trip_2: 0,
@@ -43,15 +50,11 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     trip_11: 0,
     trip_12: 0,
     trip_13: 0,
-    // Daily & Cumulative Tonnage/Trip Metrics
+    // Tonnage & Fuel Metrics
     tons: 0,
     cummulative_tons: 0,
     trips_count: 0,
     cummulative_trips: 0,
-    // Fuel Log Metrics
-    fuel_1: 0,
-    fuel_2: 0,
-    fuel_3: 0,
     total_fuel_added: 0,
     expected_fuel_bal: 0,
     actual_fuel_bal: 0,
@@ -120,7 +123,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <PageHeader
           title={isMCL ? 'MCL Operational Daily Logs' : 'Trips'}
-          subtitle={isMCL ? 'Shale & Limestone multi-trip logs, cumulative tonnage, and fuel tracking' : 'Trip records and dispatch'}
+          subtitle="Shale & Limestone multi-trip logs, area breakdown (M, G, N, S, T), and fuel tracking"
           icon={<RouteIcon className="h-6 w-6" />}
           iconColor={portalColor}
           onAdd={openAdd}
@@ -150,60 +153,55 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
                 <th>Truck</th>
                 <th>Driver</th>
                 {isMCL && <>
-                  <th>Trips (1-13)</th>
+                  <th title="MCL Mines">M</th>
+                  <th title="Gas">G</th>
+                  <th title="Ngamani">N</th>
+                  <th title="Minor St/Pile">S</th>
+                  <th title="Tezzo">T</th>
+                  <th>Total</th>
                   <th>Daily Tons</th>
                   <th>Cum. Tons</th>
-                  <th>Daily Trips</th>
-                  <th>Cum. Trips</th>
-                  <th>Total Fuel (L)</th>
                 </>}
                 <th>Status</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody>
-              {visibleTrips.map(t => {
-                // Calculate quick total trips logged across slots 1 to 13
-                const tripSlotsCount = [
-                  t.trip_1, t.trip_2, t.trip_3, t.trip_4, t.trip_5, t.trip_6,
-                  t.trip_7, t.trip_8, t.trip_9, t.trip_10, t.trip_11, t.trip_12, t.trip_13
-                ].filter(val => val > 0).length;
-
-                return (
-                  <tr key={t.id}>
-                    <td className="font-medium text-slate-700">{t.trip_date}</td>
-                    <td className="font-bold text-slate-800">{t.vehicle?.plate_number || '—'}</td>
-                    <td className="text-slate-600">{t.driver?.name || '—'}</td>
-                    {isMCL && <>
-                      <td className="text-slate-600 font-mono">{t.trips_count || tripSlotsCount || 0} Slots</td>
-                      <td className="font-semibold text-emerald-700">{t.tons || 0} T</td>
-                      <td className="text-slate-600">{t.cummulative_tons || 0} T</td>
-                      <td className="font-semibold text-blue-700">{t.trips_count || 0}</td>
-                      <td className="text-slate-600">{t.cummulative_trips || 0}</td>
-                      <td className="text-amber-700 font-medium">{t.total_fuel_added || t.fuel_actual || 0} L</td>
-                    </>}
-                    <td>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700">
-                        {t.status || 'completed'}
-                      </span>
-                    </td>
-                    <td>
-                      <button onClick={() => openEdit(t)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {visibleTrips.map(t => (
+                <tr key={t.id}>
+                  <td className="font-medium text-slate-700">{t.trip_date}</td>
+                  <td className="font-bold text-slate-800">{t.vehicle?.plate_number || '—'}</td>
+                  <td className="text-slate-600">{t.driver?.name || '—'}</td>
+                  {isMCL && <>
+                    <td className="font-semibold text-slate-700">{t.M || 0}</td>
+                    <td className="font-semibold text-slate-700">{t.G || 0}</td>
+                    <td className="font-semibold text-slate-700">{t.N || 0}</td>
+                    <td className="font-semibold text-slate-700">{t.S || 0}</td>
+                    <td className="font-semibold text-slate-700">{t.T || 0}</td>
+                    <td className="font-bold text-blue-700">{t.TOTAL || 0}</td>
+                    <td className="font-semibold text-emerald-700">{t.tons || 0} T</td>
+                    <td className="text-slate-600">{t.cummulative_tons || 0} T</td>
+                  </>}
+                  <td>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700">
+                      {t.status || 'completed'}
+                    </span>
+                  </td>
+                  <td>
+                    <button onClick={() => openEdit(t)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                      <Edit className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Multi-Trip Log Form Modal */}
+      {/* Modal Form */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit MCL Operational Log' : 'Add MCL Operational Log'} size="xl">
         <div className="space-y-6 max-h-[75vh] overflow-y-auto p-1">
-          {/* Section 1: Basic Information */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
               <label className="label">Log Date *</label>
@@ -225,7 +223,38 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
             </div>
           </div>
 
-          {/* Section 2: Individual Trip Slots (Trip 1 - Trip 13) */}
+          {/* Area Breakdown (M, G, N, S, T) */}
+          <div>
+            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Area Breakdown (M, G, N, S, T)</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">M (Mines)</label>
+                <input type="text" className="input text-xs" value={form.M} onChange={e => setForm({ ...form, M: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">G (Gas)</label>
+                <input type="text" className="input text-xs" value={form.G} onChange={e => setForm({ ...form, G: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">N (Ngamani)</label>
+                <input type="text" className="input text-xs" value={form.N} onChange={e => setForm({ ...form, N: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">S (Minor St/Pile)</label>
+                <input type="text" className="input text-xs" value={form.S} onChange={e => setForm({ ...form, S: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">T (Tezzo)</label>
+                <input type="text" className="input text-xs" value={form.T} onChange={e => setForm({ ...form, T: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">TOTAL</label>
+                <input type="text" className="input text-xs font-bold text-blue-700" value={form.TOTAL} onChange={e => setForm({ ...form, TOTAL: e.target.value })} />
+              </div>
+            </div>
+          </div>
+
+          {/* Daily Trip Runs (Trip 1 - Trip 13) */}
           <div>
             <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Daily Trip Runs (Trip 1 to 13)</h4>
             <div className="grid grid-cols-3 sm:grid-cols-7 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -245,52 +274,6 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
               })}
             </div>
           </div>
-
-          {/* Section 3: Daily & Cumulative Metrics */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Daily Tonnage & Trips Summary</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <div>
-                <label className="label">Daily Tons</label>
-                <input type="number" className="input" value={form.tons} onChange={e => setForm({ ...form, tons: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="label">Cumulative Tons</label>
-                <input type="number" className="input" value={form.cummulative_tons} onChange={e => setForm({ ...form, cummulative_tons: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="label">Daily Trips</label>
-                <input type="number" className="input" value={form.trips_count} onChange={e => setForm({ ...form, trips_count: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="label">Cumulative Trips</label>
-                <input type="number" className="input" value={form.cummulative_trips} onChange={e => setForm({ ...form, cummulative_trips: Number(e.target.value) })} />
-              </div>
-            </div>
-          </div>
-
-          {/* Section 4: Daily Fuel Logs */}
-          <div>
-            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fuel Reconciliation (Liters)</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <div>
-                <label className="label">Fuel Added (1)</label>
-                <input type="number" className="input" value={form.fuel_1} onChange={e => setForm({ ...form, fuel_1: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="label">Total Fuel Added</label>
-                <input type="number" className="input" value={form.total_fuel_added} onChange={e => setForm({ ...form, total_fuel_added: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="label">Expected Fuel Bal</label>
-                <input type="number" className="input" value={form.expected_fuel_bal} onChange={e => setForm({ ...form, expected_fuel_bal: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="label">Actual Fuel Bal</label>
-                <input type="number" className="input" value={form.actual_fuel_bal} onChange={e => setForm({ ...form, actual_fuel_bal: Number(e.target.value) })} />
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="mt-5 flex justify-end gap-2 border-t pt-3">
@@ -308,9 +291,10 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         portalColor={portalColor}
         subAccount={subAccount}
         sampleColumns={[
-          'DATE', 'Trip 1', 'Trip 2', 'Trip 3', 'Trip 4', 'Trip 5', 'Trip 6', 
+          'DATE', 'M', 'G', 'N', 'S', 'T', 'TOTAL',
+          'Trip 1', 'Trip 2', 'Trip 3', 'Trip 4', 'Trip 5', 'Trip 6', 
           'Trip 7', 'Trip 8', 'Trip 9', 'Trip 10', 'Trip 11', 'Trip 12', 'Trip 13', 
-          'TONS', 'CUMMULATIVE TONS', 'TRIPS', 'CUMMULATIVE TRIPS', 'TOTAL Fuel Added (L)'
+          'TONS', 'CUMMULATIVE TONS', 'TRIPS', 'CUMMULATIVE TRIPS'
         ]}
         onSuccess={loadData}
       />
