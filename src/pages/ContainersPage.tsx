@@ -5,7 +5,6 @@ import { useAuth } from '@/lib/auth';
 import { PageHeader } from '@/components/PageHeader';
 import { Modal } from '@/components/Modal';
 import { DocumentUpload } from '@/components/DocumentUpload';
-import { DocumentScanner, ScannedDocumentFields } from '@/components/DocumentScanner';
 import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { useToast } from '@/components/Toast';
 import { SubAccount, MCLArea } from '@/lib/portals';
@@ -174,24 +173,6 @@ export function ContainersPage({ mclArea, portalColor, isMaster = false }: { mcl
     setEditId(id);
     setContainerDocs(documents || []);
     setModalOpen(true);
-  };
-
-  const handleScanComplete = (fields: ScannedDocumentFields) => {
-    setForm(prev => ({
-      ...prev,
-      container_no: fields.container_no ?? prev.container_no,
-      size: fields.size ?? prev.size,
-      shipping_line: fields.shipping_line ?? prev.shipping_line,
-      agent_name: fields.agent_name ?? prev.agent_name,
-      consignee: fields.consignee ?? prev.consignee,
-      bl_no: fields.bl_no ?? prev.bl_no,
-      vessel_voyage: fields.vessel_voyage ?? prev.vessel_voyage,
-      eta: fields.eta ?? prev.eta,
-      destination: fields.destination ?? prev.destination,
-      detention_validity: fields.detention_validity ?? prev.detention_validity,
-      release_date: fields.release_date ?? prev.release_date,
-    }));
-    showToast('Document scanned — fields auto-filled for review', 'success');
   };
 
   const save = async () => {
@@ -395,13 +376,6 @@ export function ContainersPage({ mclArea, portalColor, isMaster = false }: { mcl
       {!derivedIsMaster && (
         <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Container' : 'Add Container'} size="xl">
           <div className="space-y-4">
-            <div className="rounded-lg bg-slate-50 border border-slate-200 p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                Scan Document (Google Document AI)
-              </p>
-              <DocumentScanner onScanComplete={handleScanComplete} buttonLabel="Scan Shipping Document" />
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {field('container_no', 'Container No *')}
               {field('size', 'Size')}
