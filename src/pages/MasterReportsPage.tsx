@@ -60,8 +60,11 @@ export function MasterReportsPage({ portalColor }: { portalColor: string }) {
       const to = toDate;
       const tripsTable = getTripsTable(sa);
 
+      // Tarmal uses date_loaded or created_at for date range, others use trip_date
+      const dateField = sa === 'tarmal' ? 'created_at' : 'trip_date';
+
       const [trips, fuel, tallies, parts, containers, vc, dc, vehicles, drivers, tyres] = await Promise.all([
-        supabase.from(tripsTable).select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)').gte('trip_date', from).lte('trip_date', to).order('trip_date', { ascending: false }),
+        supabase.from(tripsTable).select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)').gte(dateField, from).lte(dateField, to).order(dateField, { ascending: false }),
         supabase.from('sub_account_fuel').select('*, vehicle:vehicles(plate_number), driver:drivers(name)').gte('refuel_date', from).lte('refuel_date', to).eq('sub_account', sa).order('refuel_date', { ascending: false }),
         supabase.from('sub_account_tallies').select('*, vehicle:vehicles(plate_number)').gte('tally_date', from).lte('tally_date', to).eq('sub_account', sa).order('tally_date', { ascending: false }),
         supabase.from('spare_parts_v2').select('*, vehicle:vehicles(plate_number)').eq('sub_account', sa).order('created_at', { ascending: false }),
