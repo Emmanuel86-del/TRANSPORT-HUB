@@ -14,6 +14,16 @@ import { useAuth } from '@/lib/auth';
 
 const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom'];
 
+// Helper to get the correct trips table per sub-account
+function getTripsTable(sa: SubAccount): string {
+  switch (sa) {
+    case 'csl': return 'csl_trips';
+    case 'mushroom': return 'mushroom_trips';
+    case 'tarmal': return 'tarmal_trips';
+    default: return 'mcl_trips';
+  }
+}
+
 export function MasterReportsPage({ portalColor }: { portalColor: string }) {
   const { showToast } = useToast();
   const { profile } = useAuth();
@@ -48,9 +58,10 @@ export function MasterReportsPage({ portalColor }: { portalColor: string }) {
     for (const sa of SUB_ACCOUNTS) {
       const from = fromDate;
       const to = toDate;
+      const tripsTable = getTripsTable(sa);
 
       const [trips, fuel, tallies, parts, containers, vc, dc, vehicles, drivers, tyres] = await Promise.all([
-        supabase.from('sub_account_trips').select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)').gte('trip_date', from).lte('trip_date', to).eq('sub_account', sa).order('trip_date', { ascending: false }),
+        supabase.from(tripsTable).select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)').gte('trip_date', from).lte('trip_date', to).order('trip_date', { ascending: false }),
         supabase.from('sub_account_fuel').select('*, vehicle:vehicles(plate_number), driver:drivers(name)').gte('refuel_date', from).lte('refuel_date', to).eq('sub_account', sa).order('refuel_date', { ascending: false }),
         supabase.from('sub_account_tallies').select('*, vehicle:vehicles(plate_number)').gte('tally_date', from).lte('tally_date', to).eq('sub_account', sa).order('tally_date', { ascending: false }),
         supabase.from('spare_parts_v2').select('*, vehicle:vehicles(plate_number)').eq('sub_account', sa).order('created_at', { ascending: false }),
