@@ -206,7 +206,7 @@ export function WorkspaceShell({
                         <span className="h-2.5 w-2.5 rounded-full bg-red-700" />
                         Master Fleet Summary
                       </button>
-                      {(['mcl', 'tarmal', 'csl', 'mushroom'] as SubAccount[]).map(slug => {
+                      {(['mcl', 'tarmal', 'csl', 'pn_mashru'] as SubAccount[]).map(slug => {
                         const p = PORTALS[slug];
                         return (
                           <button
