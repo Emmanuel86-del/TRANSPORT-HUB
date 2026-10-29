@@ -29,11 +29,6 @@ function parseSources(notes?: string | null): Record<number, string> {
   return out;
 }
 
-function truckFromNotes(notes?: string | null): string | null {
-  const m = notes?.match(/Truck:\s*([^;]+)/);
-  return m ? m[1].trim() : null;
-}
-
 const tripWeights = (t: any): number[] =>
   TRIP_NUMS.map(n => Number(t[`trip_${n}`]) || 0);
 
@@ -121,10 +116,11 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    const orderField = isLongDistance || isCSL ? 'created_at' : 'trip_date';
     const [tripRes, vehRes, drvRes] = await Promise.all([
       supabase.from(tableName)
         .select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)')
-        .order('created_at', { ascending: false }),
+        .order(orderField, { ascending: false }),
       supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
       supabase.from('drivers').select('id, name').order('name'),
     ]);
@@ -132,7 +128,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     setVehicles(vehRes.data || []);
     setDrivers(drvRes.data || []);
     setLoading(false);
-  }, [tableName]);
+  }, [tableName, isLongDistance, isCSL]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -515,7 +511,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
                             sources: { ...form.sources, [n]: e.target.value }
                           })}
                         >
-                          {Object.keys(SOURCES.forEach ? SOURCES : SOURCES).map(code => (
+                          {Object.keys(SOURCES).map(code => (
                             <option key={code} value={code} title={SOURCES[code]}>{code}</option>
                           ))}
                         </select>
