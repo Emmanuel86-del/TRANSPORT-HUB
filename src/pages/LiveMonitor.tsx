@@ -61,7 +61,7 @@ const PORTAL_LOCATIONS: Record<string, { center: [number, number]; zoom: number;
     center: [-3.9500, 39.6800],
     zoom: 14,
     geofences: [
-      { name: 'MUSHROOM Farm & Plant', color: '#9C27B0', coords: [[-3.9560, 39.6740], [-3.9560, 39.6860], [-3.9440, 39.6860], [-3.9440, 39.6740]] },
+      { name: 'PN_MASHRU Farm & Plant', color: '#9C27B0', coords: [[-3.9560, 39.6740], [-3.9560, 39.6860], [-3.9440, 39.6860], [-3.9440, 39.6740]] },
     ],
   },
   all: {
