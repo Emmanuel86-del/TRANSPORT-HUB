@@ -207,6 +207,13 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       payload.trip_date = form.trip_date;
       payload.net_tallage = Number(formTons.toFixed(2));
       TRIP_NUMS.forEach(n => { payload[`trip_${n}`] = Number(form.weights[n]) || 0; });
+      
+      const sourceEntries = Object.entries(form.sources)
+        .filter(([_, v]) => v)
+        .map(([k, v]) => `Trip${k}=${v}`)
+        .join('; ');
+      payload.notes = sourceEntries ? `${sourceEntries}; ${form.notes}` : form.notes;
+
       if (isMCL && mclArea) payload.mcl_area_id = mclArea;
     }
 
@@ -471,24 +478,65 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label className="label">Date *</label>
-                <input type="date" className="input" value={form.trip_date} onChange={e => setForm({ ...form, trip_date: e.target.value })} />
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="label">Date *</label>
+                  <input type="date" className="input" value={form.trip_date} onChange={e => setForm({ ...form, trip_date: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Truck *</label>
+                  <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
+                    <option value="">Select Truck</option>
+                    {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Driver</label>
+                  <select className="input" value={form.driver_id} onChange={e => setForm({ ...form, driver_id: e.target.value })}>
+                    <option value="">Select Driver</option>
+                    {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
               </div>
+
               <div>
-                <label className="label">Truck *</label>
-                <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
-                  <option value="">Select Truck</option>
-                  {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label">Driver</label>
-                <select className="input" value={form.driver_id} onChange={e => setForm({ ...form, driver_id: e.target.value })}>
-                  <option value="">Select Driver</option>
-                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Trip Weights (KG) & Sources</h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  {TRIP_NUMS.map(n => (
+                    <div key={n} className="space-y-1">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[11px] font-bold text-slate-700">Trip {n}</label>
+                        <select
+                          className="text-[10px] py-0.5 px-1 border border-slate-300 rounded bg-white text-slate-700"
+                          value={form.sources[n] || 'M'}
+                          onChange={e => setForm({
+                            ...form,
+                            sources: { ...form.sources, [n]: e.target.value }
+                          })}
+                        >
+                          {Object.keys(SOURCES.forEach ? SOURCES : SOURCES).map(code => (
+                            <option key={code} value={code} title={SOURCES[code]}>{code}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <input
+                        type="number"
+                        placeholder="KG"
+                        className="input text-xs py-1"
+                        value={form.weights[n] || ''}
+                        onChange={e => setForm({
+                          ...form,
+                          weights: { ...form.weights, [n]: e.target.value }
+                        })}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between items-center mt-2 px-1 text-xs font-semibold text-slate-700">
+                  <span>Total Trips: {formTrips}</span>
+                  <span className="text-emerald-700">Total Weight: {formTons.toFixed(2)} Tons</span>
+                </div>
               </div>
             </div>
           )}
