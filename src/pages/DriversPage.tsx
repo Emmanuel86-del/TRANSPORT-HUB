@@ -9,7 +9,7 @@ import { LoadingSpinner, EmptyState } from '@/components/Shared';
 import { Driver } from '@/types';
 import { BulkImportModal } from '@/components/BulkImportModal';
 
-const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom'];
+const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'pn_mashru'];
 
 export function DriversPage({ portalColor, isMaster }: { portalColor: string; isMaster?: boolean }) {
   const { profile } = useAuth();
