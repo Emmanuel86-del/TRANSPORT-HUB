@@ -197,7 +197,7 @@ export function Dashboard({
     );
   }
 
-  // Render Specific Sub-Account Operational Dashboard (MCL, Tarmal, CSL, Mushroom)
+  // Render Specific Sub-Account Operational Dashboard (MCL, Tarmal, CSL, pn_mashru)
   const activeTrips = trips.filter(t => t.status === 'in_progress' || t.status === 'scheduled');
   const completedTrips = trips.filter(t => t.status === 'completed');
   const activeVehicles = vehicles.filter(v => v.status === 'active');
