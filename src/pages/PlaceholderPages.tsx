@@ -146,7 +146,7 @@ export function OverviewPage({ color }: { color: string }) {
     { key: 'mcl', name: 'MCL Portal', color: 'text-red-600' },
     { key: 'tarmal', name: 'Tarmal Portal', color: 'text-red-600' },
     { key: 'csl', name: 'CSL Portal', color: 'text-red-600' },
-    { key: 'mushroom', name: 'Mushroom Portal', color: 'text-red-600' },
+    { key: 'pn_mashru', name: 'pn_mashru Portal', color: 'text-red-600' },
   ];
 
   const totalGroupRevenue = Object.values(metrics).reduce((sum, m) => sum + m.revenue, 0);
