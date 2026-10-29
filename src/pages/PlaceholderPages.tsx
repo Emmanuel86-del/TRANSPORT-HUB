@@ -89,7 +89,7 @@ export function OverviewPage({ color }: { color: string }) {
         const containers = containersRes.data || [];
         const fuelLogs = fuelRes.data || [];
 
-        const subAccounts = ['mcl', 'tarmal', 'csl', 'mushroom'];
+        const subAccounts = ['mcl', 'tarmal', 'csl', 'pn_mashru'];
         const newMetrics: Record<string, SubAccountMetrics> = {};
 
         subAccounts.forEach(sa => {
