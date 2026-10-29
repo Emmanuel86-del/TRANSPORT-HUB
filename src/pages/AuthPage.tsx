@@ -48,8 +48,43 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
         showToast('Account created successfully! You can now sign in.', 'success');
         setIsSignUp(false);
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        // Step 1: Attempt sign-in
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+
+        // Step 2: Fetch the user's profile to check which portal they belong to
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('sub_account, role')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profileError || !profile) {
+          // Can't verify the user — sign them out for safety
+          await supabase.auth.signOut();
+          throw new Error('Unable to verify account credentials. Please try again.');
+        }
+
+        const userSubAccount = profile.sub_account as string;
+        const portalSlug = p.slug;
+
+        // Step 3: Master portal — only master sub_account users allowed
+        if (portalSlug === 'master' && userSubAccount !== 'master') {
+          await supabase.auth.signOut();
+          throw new Error(
+            'Invalid credentials for this portal. Please sign in through your correct portal.'
+          );
+        }
+
+        // Step 4: Sub-account portal — only users from that exact sub-account allowed
+        if (portalSlug !== 'master' && userSubAccount !== portalSlug) {
+          await supabase.auth.signOut();
+          throw new Error(
+            'Invalid credentials for this portal. Please sign in through your correct portal.'
+          );
+        }
+
+        // Step 5: All checks passed
         showToast('Signed in successfully!', 'success');
       }
     } catch (err: any) {
