@@ -7,8 +7,8 @@ interface PageHeaderProps {
   iconColor: string;
   onAdd?: () => void;
   addLabel?: string;
-  onUploadClick?: () => void; // Added prop for custom upload handler
-  onDownloadTemplate?: () => void; // Added prop for custom template download
+  onUploadClick?: () => void;
+  onDownloadTemplate?: () => void;
 }
 
 export function PageHeader({
@@ -25,10 +25,9 @@ export function PageHeader({
     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
       <div className="flex items-center gap-4">
         <div 
-          className="p-3 rounded-xl text-white shadow-md flex items-center justify-center shrink-0"
-          style={{ background: iconColor }}
+          className="p-1.5 rounded-xl bg-white border border-slate-200 shadow-md flex items-center justify-center shrink-0 w-14 h-14 overflow-hidden"
         >
-          {icon}
+          <img src="/sal-logo.jpeg" alt="SAL" className="w-full h-full object-contain" />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h1>
