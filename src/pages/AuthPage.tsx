@@ -165,7 +165,7 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
                     <option value="mcl">MCL</option>
                     <option value="tarmal">TARMAL</option>
                     <option value="csl">CSL</option>
-                    <option value="mushroom">MUSHROOM</option>
+                    <option value="pn_mashru">PN_MASHRU</option>
                   </select>
                 </div>
               </div>
