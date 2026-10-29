@@ -19,7 +19,7 @@ interface Vehicle {
   sub_account: string;
 }
 
-const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom'];
+const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'pn_mashru'];
 
 export function VehiclesPage({ portalColor = '#0f172a', isMaster = false }: { portalColor?: string; isMaster?: boolean }) {
   const { profile } = useAuth();
