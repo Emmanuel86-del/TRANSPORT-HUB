@@ -61,8 +61,8 @@ type FormState = {
   driver_id: string;
   status: string;
   notes: string;
-  weights: Record<number, string>; // kg per trip, as typed
-  sources: Record<number, string>; // M/G/N/S/T per trip
+  weights: Record<number, string>; // kg per trip for MCL
+  sources: Record<number, string>; // M/G/N/S/T per trip for MCL
   // Tarmal specific fields
   from_location: string;
   delivery_to: string;
@@ -71,6 +71,9 @@ type FormState = {
   invoice_no: string;
   date_loaded: string;
   date_delivered: string;
+  // CSL & Mushroom specific fields
+  product: string;
+  net_weight: string; // Weight in tons or kg
 };
 
 const emptyForm = (): FormState => ({
@@ -88,6 +91,8 @@ const emptyForm = (): FormState => ({
   invoice_no: '',
   date_loaded: new Date().toISOString().split('T')[0],
   date_delivered: new Date().toISOString().split('T')[0],
+  product: '',
+  net_weight: '',
 });
 
 export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | null; portalColor: string }) {
@@ -96,6 +101,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
   const isMCL = subAccount === 'mcl';
   const isTarmal = subAccount === 'tarmal';
+  const isCSLOrMushroom = subAccount === 'csl' || subAccount === 'mushroom';
 
   const [loading, setLoading] = useState(true);
   const [trips, setTrips] = useState<any[]>([]);
@@ -157,6 +163,8 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       invoice_no: t.invoice_no || '',
       date_loaded: t.date_loaded || t.trip_date || new Date().toISOString().split('T')[0],
       date_delivered: t.date_delivered || t.trip_date || new Date().toISOString().split('T')[0],
+      product: t.product || t.item || '',
+      net_weight: t.net_tallage ? String(t.net_tallage) : '',
     });
     setEditId(t.id);
     setModalOpen(true);
@@ -179,7 +187,13 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       status: form.status,
     };
 
-    if (isTarmal) {
+    if (isCSLOrMushroom) {
+      payload.departure_point = form.from_location;
+      payload.destination = form.delivery_to;
+      payload.product = form.product;
+      payload.delivery_no = form.delivery_no;
+      payload.net_tallage = Number(form.net_weight) || 0;
+    } else if (isTarmal) {
       payload.departure_point = form.from_location;
       payload.destination = form.delivery_to;
       payload.item = form.item;
@@ -235,12 +249,20 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     <div className="space-y-5 animate-fade-in">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <PageHeader
-          title={isMCL ? 'MCL Daily Trip Logs' : isTarmal ? 'Tarmal Delivery Trips' : 'Trips'}
-          subtitle={isMCL ? 'Daily loads per truck, material source, tons and cumulative totals' : isTarmal ? 'Driver deliveries, origin, destination, invoice, and transit days' : 'Trip records and dispatch'}
+          title={
+            isMCL ? 'MCL Daily Trip Logs' :
+            isTarmal ? 'Tarmal Delivery Trips' :
+            isCSLOrMushroom ? `${subAccount.toUpperCase()} Product Trips` : 'Trips'
+          }
+          subtitle={
+            isMCL ? 'Daily loads per truck, material source, tons and cumulative totals' :
+            isTarmal ? 'Driver deliveries, origin, destination, invoice, and transit days' :
+            isCSLOrMushroom ? 'Product dispatches, trucks, origin, destination, and weights' : 'Trip records and dispatch'
+          }
           icon={<RouteIcon className="h-6 w-6" />}
           iconColor={portalColor}
           onAdd={openAdd}
-          addLabel={isTarmal ? 'Add Trip' : 'Add Daily Log'}
+          addLabel="Add Trip"
         />
         <button
           onClick={() => setIsBulkOpen(true)}
@@ -256,6 +278,50 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       ) : visibleTrips.length === 0 ? (
         <div className="card">
           <EmptyState icon={<RouteIcon className="h-8 w-8" />} title="No trip records found" message="Import your monthly sheet or add a new record." />
+        </div>
+      ) : isCSLOrMushroom ? (
+        // CSL & MUSHROOM LAYOUT TABLE (Matching image: TRUCK, NAME, PRODUCT, DELIVERY, FROM, TO + Date & Weight)
+        <div className="card table-wrapper overflow-x-auto">
+          <table className="data-table text-xs">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Truck</th>
+                <th>Name (Driver)</th>
+                <th>Product</th>
+                <th>Delivery No.</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Weight (T)</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleTrips.map(t => (
+                <tr key={t.id}>
+                  <td className="font-medium text-slate-700">{t.trip_date || '—'}</td>
+                  <td className="font-bold text-slate-800">{t.vehicle?.plate_number || truckFromNotes(t.notes) || '—'}</td>
+                  <td className="font-semibold text-slate-800">{t.driver?.name || '—'}</td>
+                  <td className="text-slate-700 font-medium">{t.product || t.item || '—'}</td>
+                  <td className="text-slate-600 font-mono">{t.delivery_no || '—'}</td>
+                  <td className="text-slate-600">{t.departure_point || '—'}</td>
+                  <td className="text-slate-600">{t.destination || '—'}</td>
+                  <td className="font-semibold text-emerald-700">{Number(t.net_tallage || 0).toFixed(2)} T</td>
+                  <td>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700">
+                      {t.status || 'completed'}
+                    </span>
+                  </td>
+                  <td>
+                    <button onClick={() => openEdit(t)} className="rounded-lg p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                      <Edit className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : isTarmal ? (
         // TARMAL LAYOUT TABLE
@@ -352,9 +418,51 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       )}
 
       {/* MODAL FORM */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Trip Record' : isTarmal ? 'Add Tarmal Trip' : 'Add Daily Log'} size="xl">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Trip Record' : 'Add Trip Record'} size="xl">
         <div className="space-y-6 max-h-[75vh] overflow-y-auto p-1">
-          {isTarmal ? (
+          {isCSLOrMushroom ? (
+            // CSL & MUSHROOM MODAL FORM
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">Date *</label>
+                <input type="date" className="input" value={form.trip_date} onChange={e => setForm({ ...form, trip_date: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Truck *</label>
+                <select className="input" value={form.vehicle_id} onChange={e => setForm({ ...form, vehicle_id: e.target.value })}>
+                  <option value="">Select Truck</option>
+                  {vehicles.map(v => <option key={v.id} value={v.id}>{v.plate_number}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Driver Name</label>
+                <select className="input" value={form.driver_id} onChange={e => setForm({ ...form, driver_id: e.target.value })}>
+                  <option value="">Select Driver</option>
+                  {drivers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Product</label>
+                <input type="text" className="input" placeholder="e.g. Mushrooms / Compost" value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Delivery No.</label>
+                <input type="text" className="input" placeholder="Delivery Note No." value={form.delivery_no} onChange={e => setForm({ ...form, delivery_no: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">From (Origin)</label>
+                <input type="text" className="input" placeholder="e.g. Farm / Factory" value={form.from_location} onChange={e => setForm({ ...form, from_location: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">To (Destination)</label>
+                <input type="text" className="input" placeholder="e.g. Market / Store" value={form.delivery_to} onChange={e => setForm({ ...form, delivery_to: e.target.value })} />
+              </div>
+              <div>
+                <label className="label">Weight (Tons)</label>
+                <input type="number" step="0.01" className="input" placeholder="e.g. 12.5" value={form.net_weight} onChange={e => setForm({ ...form, net_weight: e.target.value })} />
+              </div>
+            </div>
+          ) : isTarmal ? (
             // TARMAL MODAL FORM
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
@@ -481,7 +589,9 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         portalColor={portalColor}
         subAccount={subAccount}
         sampleColumns={
-          isTarmal
+          isCSLOrMushroom
+            ? ['trip_date', 'departure_point', 'destination', 'product', 'delivery_no', 'net_tallage']
+            : isTarmal
             ? ['trip_date', 'departure_point', 'destination', 'item', 'delivery_no', 'invoice_no', 'date_loaded', 'date_delivered']
             : ['trip_date', 'departure_point', 'trip_1', 'trip_2', 'trip_3', 'net_tallage', 'cumulative_tons']
         }
