@@ -12,13 +12,13 @@ import { LoadingSpinner } from '@/components/Shared';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/lib/auth';
 
-const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'mushroom'];
+const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'pn_mashru'];
 
 // Helper to get the correct trips table per sub-account
 function getTripsTable(sa: SubAccount): string {
   switch (sa) {
     case 'csl': return 'csl_trips';
-    case 'mushroom': return 'mushroom_trips';
+    case 'pn_mashru': return 'pn_mashru_trips';
     case 'tarmal': return 'tarmal_trips';
     default: return 'mcl_trips';
   }
