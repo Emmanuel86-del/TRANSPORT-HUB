@@ -116,11 +116,10 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const orderField = isLongDistance || isCSL ? 'created_at' : 'trip_date';
     const [tripRes, vehRes, drvRes] = await Promise.all([
       supabase.from(tableName)
         .select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)')
-        .order(orderField, { ascending: false }),
+        .order('created_at', { ascending: false, nullsFirst: false }),
       supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
       supabase.from('drivers').select('id, name').order('name'),
     ]);
@@ -128,7 +127,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     setVehicles(vehRes.data || []);
     setDrivers(drvRes.data || []);
     setLoading(false);
-  }, [tableName, isLongDistance, isCSL]);
+  }, [tableName]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
