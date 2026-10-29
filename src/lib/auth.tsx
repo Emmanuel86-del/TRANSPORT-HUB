@@ -31,8 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
   const initialized = useRef(false);
 
-  // Profile fetcher from Supabase
-  const fetchProfile = useCallback(async (userId: string, userEmail?: string): Promise<Profile | null> => {
+  // Keep track of current user ID to prevent redundant profile re-fetches on tab switches
+  const currentUserIdRef = useRef<string | null>(null);
+
+  // Profile fetcher from Supabase with resilient timeout handling
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
       const profilePromise = supabase
         .from('profiles')
@@ -41,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
       );
 
       const { data, error } = (await Promise.race([profilePromise, timeoutPromise])) as any;
@@ -59,10 +62,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setAuthError(null);
 
-    const safetyTimer = setTimeout(() => {
-      setLoading(false);
-    }, 4000);
-
     try {
       const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
 
@@ -71,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setUser(null);
         setProfile(null);
-        clearTimeout(safetyTimer);
         setLoading(false);
         return;
       }
@@ -80,13 +78,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(currentSession?.user ?? null);
 
       if (currentSession?.user) {
-        const userProfile = await fetchProfile(currentSession.user.id, currentSession.user.email);
-        setProfile(userProfile);
-        if (userProfile?.sub_account) {
-          setSubAccountFilter(userProfile.sub_account);
+        currentUserIdRef.current = currentSession.user.id;
+        const userProfile = await fetchProfile(currentSession.user.id);
+        if (userProfile) {
+          setProfile(userProfile);
+          if (userProfile.sub_account) {
+            setSubAccountFilter(userProfile.sub_account);
+          }
         }
       } else {
-        // STRICT AUTH: No guest fallback — force password login
+        currentUserIdRef.current = null;
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -94,11 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       setAuthError('Connection error. Please try again.');
-      setSession(null);
-      setUser(null);
-      setProfile(null);
     } finally {
-      clearTimeout(safetyTimer);
       setLoading(false);
     }
   }, [fetchProfile]);
@@ -109,18 +106,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initAuth();
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      // Ignore TOKEN_REFRESHED or duplicate events if the user ID hasn't actually changed
+      // This prevents tab-switching focus triggers from wiping or resetting your React state.
+      if (event === 'TOKEN_REFRESHED' && newSession?.user?.id === currentUserIdRef.current) {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        return;
+      }
+
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
       if (newSession?.user) {
-        const userProfile = await fetchProfile(newSession.user.id, newSession.user.email);
-        setProfile(userProfile);
-        if (userProfile?.sub_account) {
-          setSubAccountFilter(userProfile.sub_account);
+        currentUserIdRef.current = newSession.user.id;
+        // Only fetch profile if we don't already have it loaded for this user
+        setProfile(prevProfile => {
+          if (prevProfile && prevProfile.id === newSession.user.id) {
+            return prevProfile;
+          }
+          return prevProfile;
+        });
+
+        const userProfile = await fetchProfile(newSession.user.id);
+        if (userProfile) {
+          setProfile(userProfile);
+          if (userProfile.sub_account) {
+            setSubAccountFilter(userProfile.sub_account);
+          }
         }
       } else {
-        // STRICT AUTH: Disallow unauthenticated visitors from accessing dashboard state
+        currentUserIdRef.current = null;
         setSession(null);
         setUser(null);
         setProfile(null);
@@ -130,7 +146,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [fetchProfile, initAuth]);
 
   const signIn = async (email: string, password: string) => {
@@ -140,7 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) return { error: error.message };
 
       if (data.user) {
-        const userProfile = await fetchProfile(data.user.id, data.user.email);
+        currentUserIdRef.current = data.user.id;
+        const userProfile = await fetchProfile(data.user.id);
         setProfile(userProfile);
         if (userProfile?.sub_account) {
           setSubAccountFilter(userProfile.sub_account);
@@ -188,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    currentUserIdRef.current = null;
     await supabase.auth.signOut();
     setSession(null);
     setUser(null);
