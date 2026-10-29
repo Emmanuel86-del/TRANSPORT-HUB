@@ -95,7 +95,7 @@ const SUB_ACCOUNT_ROWS = [
   { value: 'mcl', label: 'MCL' },
   { value: 'tarmal', label: 'Tarmal' },
   { value: 'csl', label: 'CSL' },
-  { value: 'mushroom', label: 'Mushroom' },
+  { value: 'pn_mashru', label: 'pn_mashru' },
 ];
 
 /* ------------------------------------------------------------------ */
