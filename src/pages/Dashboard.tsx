@@ -11,7 +11,7 @@ import { LoadingSpinner } from '@/components/Shared';
 import { ContainersDueSoonAlert } from '@/components/ContainersDueSoonAlert';
 import { MCLArea } from '@/lib/portals';
 
-const SUB_ACCOUNTS = ['mcl', 'tarmal', 'csl', 'mushroom'] as const;
+const SUB_ACCOUNTS = ['mcl', 'tarmal', 'csl', 'pn_mashru'] as const;
 
 interface SubAccountSummary {
   subAccount: string;
