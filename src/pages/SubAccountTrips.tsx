@@ -116,10 +116,15 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    let query = supabase.from(tableName).select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)');
+    
+    // Only apply .order() if it's not mcl to prevent 400 errors
+    if (!isMCL) {
+      query = query.order('created_at', { ascending: false });
+    }
+
     const [tripRes, vehRes, drvRes] = await Promise.all([
-      supabase.from(tableName)
-        .select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)')
-        .order('created_at', { ascending: false, nullsFirst: false }),
+      query,
       supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
       supabase.from('drivers').select('id, name').order('name'),
     ]);
@@ -127,7 +132,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     setVehicles(vehRes.data || []);
     setDrivers(drvRes.data || []);
     setLoading(false);
-  }, [tableName]);
+  }, [tableName, isMCL]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
