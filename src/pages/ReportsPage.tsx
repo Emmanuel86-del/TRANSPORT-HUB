@@ -116,7 +116,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
 
   const periodLabel = `${fmtDate(new Date(filters.fromDate))} → ${fmtDate(new Date(filters.toDate))}`;
 
-  // ALL useMemo hooks declared unconditionally at the top level
   const trips = data?.trips || [];
   const fuel = data?.fuel || [];
   const tallies = data?.tallies || [];
@@ -294,7 +293,6 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
     });
   }
 
-  // EARLY RETURNS placed safely AFTER all hooks are declared
   if (loading && !data) return <LoadingSpinner message="Loading report data..." />;
   if (!data) return <div className="card"><EmptyState icon={<FileText className="h-8 w-8" />} title="No data" message="No data available for the selected period." /></div>;
 
@@ -370,8 +368,8 @@ export function ReportsPage({ mclArea, portalColor }: { mclArea: MCLArea | null;
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm" style={{ background: portalColor }}>
-            <FileText className="h-6 w-6" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden p-1 shrink-0">
+            <img src="/sal-logo.jpeg" alt="SAL" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Reports</h1>
