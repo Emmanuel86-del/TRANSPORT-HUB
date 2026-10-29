@@ -56,7 +56,7 @@ function calculateDays(loaded?: string, delivered?: string): number {
 function getTableName(subAccount: string): string {
   switch (subAccount) {
     case 'csl': return 'csl_trips';
-    case 'mushroom': return 'mushroom_trips';
+    case 'pn_mashru': return 'pn_mashru_trips';
     case 'tarmal': return 'tarmal_trips';
     default: return 'mcl_trips';
   }
@@ -105,8 +105,8 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
   const { profile } = useAuth();
   const subAccount = (profile?.sub_account ?? getSubAccountFilter() ?? 'master') as SubAccount;
   const isMCL = subAccount === 'mcl';
-  const isTarmal = subAccount === 'tarmal';
-  const isCSLOrMushroom = subAccount === 'csl' || subAccount === 'mushroom';
+  const isLongDistance = subAccount === 'tarmal' || subAccount === 'pn_mashru';
+  const isCSL = subAccount === 'csl';
   const tableName = getTableName(subAccount);
 
   const [loading, setLoading] = useState(true);
@@ -124,7 +124,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
     const [tripRes, vehRes, drvRes] = await Promise.all([
       supabase.from(tableName)
         .select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)')
-        .order('trip_date', { ascending: false }),
+        .order('created_at', { ascending: false }),
       supabase.from('vehicles').select('id, plate_number, make, model').order('plate_number'),
       supabase.from('drivers').select('id, name').order('name'),
     ]);
@@ -154,7 +154,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       if (w > 0) weights[n] = String(w);
     });
     setForm({
-      trip_date: t.trip_date || new Date().toISOString().split('T')[0],
+      trip_date: t.trip_date || t.date_loaded || new Date().toISOString().split('T')[0],
       vehicle_id: t.vehicle_id || '',
       driver_id: t.driver_id || '',
       status: t.status || 'completed',
@@ -163,7 +163,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       sources: parseSources(t.notes),
       from_location: t.departure_point || '',
       delivery_to: t.destination || '',
-      item: t.item || '',
+      item: t.item || t.product || '',
       delivery_no: t.delivery_no || '',
       invoice_no: t.invoice_no || '',
       date_loaded: t.date_loaded || t.trip_date || new Date().toISOString().split('T')[0],
@@ -187,14 +187,14 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       status: form.status,
     };
 
-    if (isCSLOrMushroom) {
+    if (isCSL) {
       payload.trip_date = form.trip_date;
       payload.departure_point = form.from_location;
       payload.destination = form.delivery_to;
       payload.product = form.product;
       payload.delivery_no = form.delivery_no;
       payload.net_tallage = Number(form.net_weight) || 0;
-    } else if (isTarmal) {
+    } else if (isLongDistance) {
       payload.departure_point = form.from_location;
       payload.destination = form.delivery_to;
       payload.item = form.item;
@@ -228,8 +228,8 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         <PageHeader
           title={
             isMCL ? 'MCL Daily Trip Logs' :
-            isTarmal ? 'Tarmal Delivery Trips' :
-            isCSLOrMushroom ? `${subAccount.toUpperCase()} Product Trips` : 'Trips'
+            subAccount === 'pn_mashru' ? 'P.N. Mashru Delivery Trips' :
+            isLongDistance ? 'Long Distance Trips' : 'Trips'
           }
           subtitle="Manage trip records and dispatch"
           icon={<RouteIcon className="h-6 w-6" />}
@@ -252,7 +252,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         <div className="card">
           <EmptyState icon={<RouteIcon className="h-8 w-8" />} title="No trip records found" message="Import your spreadsheet or add a new record." />
         </div>
-      ) : isCSLOrMushroom ? (
+      ) : isCSL ? (
         <div className="card table-wrapper overflow-x-auto">
           <table className="data-table text-xs">
             <thead>
@@ -295,12 +295,13 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
             </tbody>
           </table>
         </div>
-      ) : isTarmal ? (
+      ) : isLongDistance ? (
         <div className="card table-wrapper overflow-x-auto">
           <table className="data-table text-xs">
             <thead>
               <tr>
                 <th>Driver</th>
+                <th>Truck</th>
                 <th>From</th>
                 <th>Delivery To</th>
                 <th>Item</th>
@@ -317,6 +318,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
               {visibleTrips.map(t => (
                 <tr key={t.id}>
                   <td className="font-semibold text-slate-800">{t.driver?.name || '—'}</td>
+                  <td className="font-bold text-slate-800">{t.vehicle?.plate_number || '—'}</td>
                   <td className="text-slate-600">{t.departure_point || '—'}</td>
                   <td className="text-slate-600">{t.destination || '—'}</td>
                   <td className="text-slate-700">{t.item || '—'}</td>
@@ -382,7 +384,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
       {/* MODAL */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? 'Edit Trip Record' : 'Add Trip Record'} size="xl">
         <div className="space-y-6 max-h-[75vh] overflow-y-auto p-1">
-          {isCSLOrMushroom ? (
+          {isCSL ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="label">Date *</label>
@@ -423,7 +425,7 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
                 <input type="number" step="0.01" className="input" placeholder="Weight in Tons" value={form.net_weight} onChange={e => setForm({ ...form, net_weight: e.target.value })} />
               </div>
             </div>
-          ) : isTarmal ? (
+          ) : isLongDistance ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="label">Driver *</label>
@@ -507,9 +509,9 @@ export function SubAccountTrips({ mclArea, portalColor }: { mclArea: MCLArea | n
         portalColor={portalColor}
         subAccount={subAccount}
         sampleColumns={
-          isCSLOrMushroom
+          isCSL
             ? ['trip_date', 'departure_point', 'destination', 'product', 'delivery_no', 'net_tallage']
-            : isTarmal
+            : isLongDistance
             ? ['trip_date', 'departure_point', 'destination', 'item', 'delivery_no', 'invoice_no', 'date_loaded', 'date_delivered']
             : ['trip_date', 'departure_point', 'trip_1', 'trip_2', 'trip_3', 'net_tallage']
         }
