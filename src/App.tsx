@@ -140,7 +140,7 @@ function AppContent() {
           return <SubAccountDashboardWrapper key="tarmal" subAccount="tarmal" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'csl': 
           return <SubAccountDashboardWrapper key="csl" subAccount="csl" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
-        case 'mushroom': 
+        case 'pn_mashru': 
           return <SubAccountDashboardWrapper key="mushroom" subAccount="mushroom" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         
         case 'users': return <Users />;
