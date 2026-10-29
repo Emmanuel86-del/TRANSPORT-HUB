@@ -141,7 +141,8 @@ function AppContent() {
         case 'csl': 
           return <SubAccountDashboardWrapper key="csl" subAccount="csl" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         case 'pn_mashru': 
-          return <SubAccountDashboardWrapper key="mushroom" subAccount="pn_mashru" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
+          return <SubAccountDashboardWrapper key="pn_mashru
+                   " subAccount="pn_mashru" onViewAllContainers={() => setActiveTab('containers')} onViewCompliance={() => setActiveTab('compliance')} />;
         
         case 'users': return <Users />;
         case 'drivers': return <DriversPage portalColor={portal.color} isMaster />;
