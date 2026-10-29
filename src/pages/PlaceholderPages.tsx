@@ -283,7 +283,7 @@ export function SubAccountViewPage({ color, name }: { color: string; name: strin
   if (lowerName.includes('mcl')) subAccountKey = 'mcl';
   else if (lowerName.includes('tarmal')) subAccountKey = 'tarmal';
   else if (lowerName.includes('csl')) subAccountKey = 'csl';
-  else if (lowerName.includes('mushroom')) subAccountKey = 'mushroom';
+  else if (lowerName.includes('pn_mashru')) subAccountKey = 'mushroom';
 
   return <LiveMonitor color={color} subAccountFilter={subAccountKey} />;
 }
