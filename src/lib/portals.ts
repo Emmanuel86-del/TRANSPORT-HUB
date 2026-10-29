@@ -1,4 +1,4 @@
-export type SubAccount = 'master' | 'mcl' | 'tarmal' | 'csl' | 'mushroom';
+export type SubAccount = 'master' | 'mcl' | 'tarmal' | 'csl' | 'pn_mashru';
 
 export type TabId =
   | 'live-monitor'
@@ -18,7 +18,7 @@ export type TabId =
   | 'mcl'
   | 'tarmal'
   | 'csl'
-  | 'mushroom';
+  | 'pn_mashru';
 
 export type MCLArea = 'karuri' | 'kiambu' | 'ruiru' | 'thika';
 
@@ -59,10 +59,10 @@ export const PORTALS: Record<SubAccount, PortalConfig> = {
     color: '#b45309',
     colorDark: '#78350f',
   },
-  mushroom: {
-    slug: 'mushroom',
-    name: 'Mushroom',
-    fullName: 'Mushroom Freight',
+  pn_mashru: {
+    slug: 'pn_mashru',
+    name: 'pn_mashru',
+    fullName: 'pn_mashru Freight',
     color: '#6d28d9',
     colorDark: '#4c1d95',
   },
@@ -86,7 +86,7 @@ export function getTabsForPortal(slug: SubAccount): TabConfig[] {
       { id: 'mcl', label: 'MCL', icon: 'Building2' },
       { id: 'tarmal', label: 'Tarmal', icon: 'Building2' },
       { id: 'csl', label: 'CSL', icon: 'Building2' },
-      { id: 'mushroom', label: 'Mushroom', icon: 'Building2' },
+      { id: 'pn_mashru', label: 'pn_mashru', icon: 'Building2' },
       { id: 'drivers', label: 'Drivers', icon: 'Users' },
       { id: 'vehicles', label: 'Trucks / Vehicles', icon: 'Truck' },
       { id: 'users', label: 'Users', icon: 'UserCog' },
