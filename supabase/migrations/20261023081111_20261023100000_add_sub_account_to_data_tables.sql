@@ -3,7 +3,7 @@
 
 ## Purpose
 Add a `sub_account` text column to all operational data tables so that each
-sub-account portal (mcl, tarmal, csl, mushroom, master) only sees its own data.
+sub-account portal (mcl, tarmal, csl, pn_mashru, master) only sees its own data.
 Master/admin users see data where sub_account = 'master'.
 
 ## Changes
