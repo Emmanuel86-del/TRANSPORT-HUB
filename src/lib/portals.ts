@@ -61,10 +61,10 @@ export const PORTALS: Record<SubAccount, PortalConfig> = {
   },
   pn_mashru: {
     slug: 'pn_mashru',
-    name: 'pn_mashru',
-    fullName: 'pn_mashru Freight',
-    color: '#6d28d9',
-    colorDark: '#4c1d95',
+    name: 'PN Mashru',
+    fullName: 'P.N. Mashru Transporters',
+    color: '#4338ca',
+    colorDark: '#312e81',
   },
 };
 
@@ -86,7 +86,7 @@ export function getTabsForPortal(slug: SubAccount): TabConfig[] {
       { id: 'mcl', label: 'MCL', icon: 'Building2' },
       { id: 'tarmal', label: 'Tarmal', icon: 'Building2' },
       { id: 'csl', label: 'CSL', icon: 'Building2' },
-      { id: 'pn_mashru', label: 'pn_mashru', icon: 'Building2' },
+      { id: 'pn_mashru', label: 'PN Mashru', icon: 'Building2' },
       { id: 'drivers', label: 'Drivers', icon: 'Users' },
       { id: 'vehicles', label: 'Trucks / Vehicles', icon: 'Truck' },
       { id: 'users', label: 'Users', icon: 'UserCog' },
