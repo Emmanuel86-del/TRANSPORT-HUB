@@ -57,7 +57,7 @@ const PORTAL_LOCATIONS: Record<string, { center: [number, number]; zoom: number;
       { name: 'Kipevu Berth Area', color: '#FF9800', coords: [[-4.0450, 39.6300], [-4.0450, 39.6420], [-4.0380, 39.6420], [-4.0380, 39.6300]] },
     ],
   },
-  mushroom: {
+ pn_mashru: {
     center: [-3.9500, 39.6800],
     zoom: 14,
     geofences: [
