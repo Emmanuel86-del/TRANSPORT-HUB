@@ -47,7 +47,7 @@ function calculateDays(loaded?: string, delivered?: string): number {
   return diff >= 0 ? diff : 0;
 }
 
-// Helper to determine the database table name based on sub-account
+// Helper to determine the dedicated database table name based on sub-account
 function getTableName(subAccount: string): string {
   switch (subAccount) {
     case 'csl': return 'csl_trips';
