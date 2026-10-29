@@ -1,64 +1,73 @@
-import { useState, CSSProperties } from 'react';
+import { useState } from 'react';
+import { useAuth } from '@/lib/auth';
+import { PortalConfig } from '@/lib/portals';
 import { supabase } from '@/lib/supabase';
-import { useToast } from '@/components/Toast';
-import { PortalConfig, PORTALS } from '@/lib/portals';
-import { Truck, Lock, Mail, User, Building, Eye, EyeOff } from 'lucide-react';
+import { Truck, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 
-export function AuthPage({ portal }: { portal?: PortalConfig }) {
-  const p = portal ?? PORTALS.master;
-  const { showToast } = useToast();
-  const [isSignUp, setIsSignUp] = useState(false);
+export function AuthPage({ portal }: { portal: PortalConfig }) {
+  const { signIn, signOut, authError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [subAccount, setSubAccount] = useState('master');
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-
-  const isMasterPortal = p.slug === 'master';
-  const accentVars = { '--accent': p.color } as CSSProperties;
-  const inputClass =
-    'w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-3 text-sm text-slate-900 outline-none focus:border-[color:var(--accent)]';
-
-  const switchMode = (signUp: boolean) => {
-    setIsSignUp(signUp);
-    setErrorMsg('');
-  };
+  const [localError, setLocalError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setErrorMsg('');
+    setLocalError(null);
 
     try {
-      if (isSignUp) {
-        const selectedSubAccount = isMasterPortal ? subAccount : p.slug;
-        const assignedRole = selectedSubAccount === 'master' ? 'corporate_admin' : 'employee';
+      // Step 1: Attempt sign-in with Supabase
+      const { error } = await signIn(email, password);
+      if (error) {
+        setLocalError(error);
+        return;
+      }
 
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-              sub_account: selectedSubAccount,
-              role: assignedRole,
-            },
-          },
-        });
-        if (error) throw error;
-        showToast('Account created successfully! You can now sign in.', 'success');
-        setIsSignUp(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        showToast('Signed in successfully!', 'success');
+      // Step 2: Fetch the user's profile to verify portal access
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('sub_account, role')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError || !profile) {
+          // Can't verify the user's portal — sign them out for safety
+          await signOut();
+          setLocalError('Unable to verify account credentials. Please try again.');
+          return;
+        }
+
+        const userSubAccount = profile.sub_account as string;
+        const portalSlug = portal.slug;
+
+        // Step 3: Portal mismatch check
+        // Master portal — only master/corporate_admin accounts allowed
+        if (portalSlug === 'master' && userSubAccount !== 'master') {
+          await signOut();
+          setLocalError(
+            'Invalid credentials for this portal. Please sign in through your correct portal.'
+          );
+          return;
+        }
+
+        // Sub-account portal — only that exact sub-account allowed
+        if (portalSlug !== 'master' && userSubAccount !== portalSlug) {
+          await signOut();
+          setLocalError(
+            'Invalid credentials for this portal. Please sign in through your correct portal.'
+          );
+          return;
+        }
+
+        // Step 4: All checks passed — user is allowed into this portal
+        // Auth context will take over and render the workspace
       }
     } catch (err: any) {
-      const msg = err?.message || 'Authentication failed';
-      setErrorMsg(msg);
-      showToast(msg, 'error');
+      setLocalError(err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -66,132 +75,86 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4 animate-fade-in"
-      style={{ background: p.colorDark, ...accentVars }}
+      className="min-h-screen flex items-center justify-center p-4"
+      style={{ background: `linear-gradient(135deg, ${portal.colorDark}, ${portal.color})` }}
     >
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="px-8 py-9 text-center text-white" style={{ background: p.color }}>
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
-            <Truck className="h-8 w-8" style={{ color: p.color }} />
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
+        {/* Header */}
+        <div className="p-8 text-center" style={{ background: portal.color }}>
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg mb-3">
+            <Truck className="h-8 w-8" style={{ color: portal.color }} />
           </div>
-          <h1 className="text-xl font-bold tracking-tight">{p.fullName}</h1>
-          <p className="mt-1 text-sm text-white/70">Fleet Management System</p>
+          <h1 className="text-xl font-bold text-white">{portal.fullName}</h1>
+          <p className="text-xs text-white/80 mt-1">Fleet Management System</p>
         </div>
 
-        <div className="space-y-5 p-8">
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => switchMode(false)}
-              className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
-                !isSignUp ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode(true)}
-              className={`rounded-lg py-2 text-sm font-semibold transition-colors ${
-                isSignUp ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              Create Account
-            </button>
+        {/* Form */}
+        <div className="p-8 space-y-5">
+          <div>
+            <h2 className="text-base font-bold text-slate-800">Sign in to your account</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Contact your administrator if you need access.
+            </p>
           </div>
 
+          {(localError || authError) && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-red-50 text-red-700 text-xs border border-red-200">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{localError || authError}</span>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    required
-                    autoComplete="name"
-                    className={inputClass}
-                    placeholder="John Doe"
-                    value={fullName}
-                    onChange={e => setFullName(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
-            {isSignUp && isMasterPortal && (
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Sub-Account / Portal</label>
-                <div className="relative">
-                  <Building className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <select
-                    className={inputClass}
-                    value={subAccount}
-                    onChange={e => setSubAccount(e.target.value)}
-                  >
-                    <option value="master">MASTER ADMIN</option>
-                    <option value="mcl">MCL</option>
-                    <option value="tarmal">TARMAL</option>
-                    <option value="csl">CSL</option>
-                    <option value="mushroom">MUSHROOM</option>
-                  </select>
-                </div>
-              </div>
-            )}
-
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Email Address</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Email Address
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <input
                   type="email"
                   required
-                  autoComplete="username"
-                  className={inputClass}
-                  placeholder="name@example.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                  placeholder="name@company.com"
+                  autoComplete="email"
+                  className="input pl-9 text-sm"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-semibold text-slate-700">Password</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Password
+              </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type="password"
                   required
-                  autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                  className={`${inputClass} pr-10`}
-                  placeholder="Your password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="input pl-9 text-sm"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(prev => !prev)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
               </div>
             </div>
-
-            {errorMsg && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                {errorMsg}
-              </div>
-            )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg py-3 text-sm font-semibold text-white shadow-md transition-opacity hover:opacity-90 disabled:opacity-60"
-              style={{ background: p.color }}
+              className="w-full py-3 px-4 rounded-xl text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2 transition-all hover:opacity-95 disabled:opacity-50"
+              style={{ background: portal.color }}
             >
-              {loading ? 'Please wait...' : isSignUp ? 'Create Account' : 'Sign In'}
+              {loading ? (
+                <span>Signing in...</span>
+              ) : (
+                <>
+                  <span>Sign In</span>
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
             </button>
           </form>
         </div>
