@@ -28,7 +28,7 @@ const SUB_ACCOUNT_OPTIONS: { value: string; label: string }[] = [
   { value: 'mcl', label: 'MCL' },
   { value: 'tarmal', label: 'TARMAL' },
   { value: 'csl', label: 'CSL' },
-  { value: 'mushroom', label: 'MUSHROOM' },
+  { value: 'pn_mashru', label: 'PN_MASHRU' },
 ];
 
 const PORTAL_LOCATIONS: Record<string, { center: [number, number]; zoom: number; geofences: any[] }> = {
