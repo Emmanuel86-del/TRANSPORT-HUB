@@ -161,6 +161,7 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
                     value={subAccount}
                     onChange={e => setSubAccount(e.target.value)}
                   >
+                    <option value="master">MASTER</option>
                     <option value="mcl">MCL</option>
                     <option value="tarmal">TARMAL</option>
                     <option value="csl">CSL</option>
