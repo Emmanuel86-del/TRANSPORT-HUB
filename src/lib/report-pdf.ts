@@ -22,7 +22,7 @@ const SUB_ACCOUNT_COLORS: Record<string, [number, number, number]> = {
   tahmal: [21, 128, 61],
   tarmal: [21, 128, 61],
   csl: [194, 65, 12],
-  mushroom: [124, 58, 237],
+  pn_mashru: [124, 58, 237],
   master: [126, 18, 25],
 };
 
