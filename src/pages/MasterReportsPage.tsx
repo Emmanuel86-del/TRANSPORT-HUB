@@ -14,7 +14,6 @@ import { useAuth } from '@/lib/auth';
 
 const SUB_ACCOUNTS: SubAccount[] = ['mcl', 'tarmal', 'csl', 'pn_mashru'];
 
-// Helper to get the correct trips table per sub-account
 function getTripsTable(sa: SubAccount): string {
   switch (sa) {
     case 'csl': return 'csl_trips';
@@ -59,8 +58,6 @@ export function MasterReportsPage({ portalColor }: { portalColor: string }) {
       const from = fromDate;
       const to = toDate;
       const tripsTable = getTripsTable(sa);
-
-      // Tarmal uses date_loaded or created_at for date range, others use trip_date
       const dateField = sa === 'tarmal' ? 'created_at' : 'trip_date';
 
       const [trips, fuel, tallies, parts, containers, vc, dc, vehicles, drivers, tyres] = await Promise.all([
@@ -159,8 +156,8 @@ export function MasterReportsPage({ portalColor }: { portalColor: string }) {
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-sm" style={{ background: portalColor }}>
-            <FileText className="h-6 w-6" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden p-1 shrink-0">
+            <img src="/sal-logo.jpeg" alt="SAL" className="w-full h-full object-contain" />
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Reports — Master</h1>
