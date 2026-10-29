@@ -48,11 +48,9 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
         showToast('Account created successfully! You can now sign in.', 'success');
         setIsSignUp(false);
       } else {
-        // Step 1: Attempt sign-in
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        // Step 2: Fetch the user's profile to check which portal they belong to
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('sub_account, role')
@@ -60,7 +58,6 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
           .single();
 
         if (profileError || !profile) {
-          // Can't verify the user — sign them out for safety
           await supabase.auth.signOut();
           throw new Error('Unable to verify account credentials. Please try again.');
         }
@@ -68,7 +65,6 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
         const userSubAccount = profile.sub_account as string;
         const portalSlug = p.slug;
 
-        // Step 3: Master portal — only master sub_account users allowed
         if (portalSlug === 'master' && userSubAccount !== 'master') {
           await supabase.auth.signOut();
           throw new Error(
@@ -76,7 +72,6 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
           );
         }
 
-        // Step 4: Sub-account portal — only users from that exact sub-account allowed
         if (portalSlug !== 'master' && userSubAccount !== portalSlug) {
           await supabase.auth.signOut();
           throw new Error(
@@ -84,7 +79,6 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
           );
         }
 
-        // Step 5: All checks passed
         showToast('Signed in successfully!', 'success');
       }
     } catch (err: any) {
@@ -103,8 +97,8 @@ export function AuthPage({ portal }: { portal?: PortalConfig }) {
     >
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="px-8 py-9 text-center text-white" style={{ background: p.color }}>
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg">
-            <Truck className="h-8 w-8" style={{ color: p.color }} />
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-white shadow-lg overflow-hidden p-1">
+            <img src="/sal-logo.jpeg" alt="Suraj Ashok Limited" className="h-full w-full object-contain" />
           </div>
           <h1 className="text-xl font-bold tracking-tight">{p.fullName}</h1>
           <p className="mt-1 text-sm text-white/70">Fleet Management System</p>
