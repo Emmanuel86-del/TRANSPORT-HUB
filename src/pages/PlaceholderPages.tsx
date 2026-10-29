@@ -69,7 +69,7 @@ export function OverviewPage({ color }: { color: string }) {
     mcl: { totalTrips: 0, revenue: 0, fuelCost: 0, distance: 0, activeTrucks: 0, activeDrivers: 0, activeContainers: 0 },
     tarmal: { totalTrips: 0, revenue: 0, fuelCost: 0, distance: 0, activeTrucks: 0, activeDrivers: 0, activeContainers: 0 },
     csl: { totalTrips: 0, revenue: 0, fuelCost: 0, distance: 0, activeTrucks: 0, activeDrivers: 0, activeContainers: 0 },
-    mushroom: { totalTrips: 0, revenue: 0, fuelCost: 0, distance: 0, activeTrucks: 0, activeDrivers: 0, activeContainers: 0 },
+    pn_mashru: { totalTrips: 0, revenue: 0, fuelCost: 0, distance: 0, activeTrucks: 0, activeDrivers: 0, activeContainers: 0 },
   });
 
   useEffect(() => {
