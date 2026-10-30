@@ -44,11 +44,14 @@ export function UploadModal({ isOpen, onClose, tableName, subAccount, onSuccess 
             return;
           }
 
-          const preparedRows = rawRows.map((row: any) => ({
-            ...row,
-            sub_account: subAccount,
-            created_at: new Date().toISOString()
-          }));
+          const DEDICATED_TRIP_TABLES = ['mcl_trips', 'csl_trips', 'tarmal_trips', 'pn_mashru_trips'];
+          const preparedRows = DEDICATED_TRIP_TABLES.includes(tableName)
+            ? rawRows
+            : rawRows.map((row: any) => ({
+                ...row,
+                sub_account: subAccount,
+                created_at: new Date().toISOString()
+              }));
 
           const { error } = await supabase.from(tableName).insert(preparedRows);
           if (error) throw error;
