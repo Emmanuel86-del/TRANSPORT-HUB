@@ -24,12 +24,19 @@ export function getSubAccountFilter(): string | null {
 
 const EXCLUDED_TABLES = new Set(['profiles', 'spare_part_history']);
 
+// Trips tables that are already separate per sub-account. The table itself keeps the
+// data apart, so there is no sub_account column to filter on or to stamp on inserts.
+const OWN_TRIPS_TABLES = new Set([
+  'mcl_trips', 'csl_trips', 'tarmal_trips', 'pn_mashru_trips', 'mushroom_trips',
+]);
+
 function shouldFilter(table: string): boolean {
-  if (EXCLUDED_TABLES.has(table)) return false;
+  if (EXCLUDED_TABLES.has(table) || OWN_TRIPS_TABLES.has(table)) return false;
   return currentSubAccount !== null && currentSubAccount !== 'master';
 }
 
-function stampValues(values: any): any {
+function stampValues(values: any, table?: string): any {
+  if (table && OWN_TRIPS_TABLES.has(table)) return values;
   const sa = currentSubAccount ?? 'master';
   if (Array.isArray(values)) {
     return values.map(v => ({ ...v, sub_account: v.sub_account ?? sa }));
@@ -87,13 +94,13 @@ function wrapBuilder(builder: any, table: string, filterApplied = false): any {
         }
 
         if (prop === 'insert') {
-          result = value.call(target, stampValues(args[0]), ...args.slice(1));
+          result = value.call(target, stampValues(args[0], table), ...args.slice(1));
           if (result && typeof result.then === 'function') return result;
           return wrapBuilder(result, table, filterApplied);
         }
 
         if (prop === 'upsert') {
-          result = value.call(target, stampValues(args[0]), ...args.slice(1));
+          result = value.call(target, stampValues(args[0], table), ...args.slice(1));
           if (result && typeof result.then === 'function') return result;
           return wrapBuilder(result, table, filterApplied);
         }
