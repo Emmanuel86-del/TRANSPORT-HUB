@@ -21,6 +21,14 @@ const roleLabel = (role: UserRole) => {
   }
 };
 
+// Each sub-account keeps its trips in its own table
+const TRIPS_TABLE_BY_PORTAL: Record<string, string> = {
+  mcl: 'mcl_trips',
+  csl: 'csl_trips',
+  tarmal: 'tarmal_trips',
+  pn_mashru: 'pn_mashru_trips',
+};
+
 function getIcon(name: string): Icons.LucideIcon {
   return (Icons[name as IconName] || Icons.Circle) as Icons.LucideIcon;
 }
@@ -85,7 +93,7 @@ export function WorkspaceShell({
     if (activeTab === 'vehicles') return { tableName: 'vehicles', templateKey: 'vehicles' };
     if (activeTab === 'spare-parts') return { tableName: 'spare_parts_v2', templateKey: 'spare_parts' };
     if (activeTab === 'tyres') return { tableName: 'tyres', templateKey: 'tyres' };
-    return { tableName: 'sub_account_trips', templateKey: 'trips' };
+    return { tableName: TRIPS_TABLE_BY_PORTAL[portal.slug] ?? 'sub_account_trips', templateKey: 'trips' };
   };
 
   const currentMapping = getTableForActiveTab();
