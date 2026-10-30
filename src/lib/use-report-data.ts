@@ -5,6 +5,33 @@ import { useAuth } from '@/lib/auth';
 import { SubAccount, MCLArea } from '@/lib/portals';
 import { ReportData, ReportFilters } from '@/lib/report-utils';
 
+// Each sub-account reports from its OWN trips table (same tables the Trips page uses).
+// dateField is the column the report period is filtered on.
+const TRIPS_SOURCE: Record<string, { table: string; dateField: string }> = {
+  mcl: { table: 'mcl_trips', dateField: 'trip_date' },
+  csl: { table: 'csl_trips', dateField: 'trip_date' },
+  tarmal: { table: 'tarmal_trips', dateField: 'created_at' },
+  pn_mashru: { table: 'pn_mashru_trips', dateField: 'created_at' },
+};
+
+function getTripsSource(sa: string) {
+  return TRIPS_SOURCE[sa] ?? TRIPS_SOURCE.mcl;
+}
+
+const TRIP_NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+
+// The new trips tables don't all use the old column names the report code expects.
+// Fill in the gaps so the report and PDF show the right dates, routes and tonnage.
+function normalizeTrip(t: any) {
+  const weightKg = TRIP_NUMS.reduce((s, n) => s + (Number(t[`trip_${n}`]) || 0), 0);
+  return {
+    ...t,
+    trip_date: t.trip_date ?? t.date_loaded ?? (t.created_at ? String(t.created_at).slice(0, 10) : null),
+    arrival_point: t.arrival_point ?? t.destination ?? null,
+    net_tallage: weightKg > 0 ? Number((weightKg / 1000).toFixed(2)) : t.net_tallage,
+  };
+}
+
 export function useReportData(filters: ReportFilters, isMaster: boolean, masterSubAccount?: SubAccount) {
   const { profile } = useAuth();
   const [data, setData] = useState<ReportData | null>(null);
@@ -19,12 +46,16 @@ export function useReportData(filters: ReportFilters, isMaster: boolean, masterS
     const from = filters.fromDate;
     const to = filters.toDate;
 
+    const { table: tripsTable, dateField } = getTripsSource(subAccount);
+    // created_at is a timestamp, so include the whole last day of the period
+    const tripsTo = dateField === 'created_at' ? `${to}T23:59:59` : to;
+
     let tripQ = supabase
-      .from('sub_account_trips')
+      .from(tripsTable)
       .select('*, vehicle:vehicles(plate_number, make, model), driver:drivers(name)')
-      .gte('trip_date', from)
-      .lte('trip_date', to)
-      .order('trip_date', { ascending: false });
+      .gte(dateField, from)
+      .lte(dateField, tripsTo)
+      .order(dateField, { ascending: false });
 
     let fuelQ = supabase
       .from('sub_account_fuel')
@@ -80,7 +111,7 @@ export function useReportData(filters: ReportFilters, isMaster: boolean, masterS
     ]);
 
     setData({
-      trips: trips.data || [],
+      trips: (trips.data || []).map(normalizeTrip),
       fuel: fuel.data || [],
       tallies: tallies.data || [],
       spareParts: parts.data || [],
@@ -91,7 +122,7 @@ export function useReportData(filters: ReportFilters, isMaster: boolean, masterS
       drivers: drivers.data || [],
     });
     setLoading(false);
-  }, [filters.fromDate, filters.toDate, filters.vehicleId, filters.mclArea, isMCL]);
+  }, [filters.fromDate, filters.toDate, filters.vehicleId, filters.mclArea, isMCL, subAccount]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
